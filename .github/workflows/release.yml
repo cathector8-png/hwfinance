@@ -1,0 +1,24 @@
+name: Build Release
+on:
+  push:
+    tags:
+      - 'v*'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: action/checkout@v4
+
+      - name: Setup Go Environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Install NFPM
+        run: go install github.com
+
+      - name: Upload Package to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          files: hwfinance.deb
