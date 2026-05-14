@@ -1,5 +1,5 @@
 name: "hwfinance"
-arch: "amd64"
+arch: "all"
 platform: "linux"
 version: "1.0.0"
 section: "default"
@@ -8,6 +8,9 @@ maintainter: "Hector Wakim cat.hector8@gmail.com"
 description: "Finance tracking and caclulation tool@
 homepage: "https://github.com"
 license: "GPL-3.0"
+depends: 
+  - python3
+  - python3-pandas
 contents:
- - src: "hwfinance"
-   dst: "/usr/bin/hwfinance"
+  - src: "hwfinance"
+    dst: "/usr/bin/hwfinance"
