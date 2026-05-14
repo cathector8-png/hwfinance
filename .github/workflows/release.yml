@@ -1,24 +1,31 @@
-name: Build Release
+name: Build Debian Source Package
 on:
   push:
     tags:
       - 'v*'
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  source-build:
+    runs-on: ubuntu latest
     steps:
       - name: Checkout Code
-        uses: action/checkout@v4
+        uses: actions/checkout@v4
 
-      - name: Setup Go Environment
-        uses: actions/setup-go@v5
-        with:
-          go-version: 'stable'
+      -name: Install Debian Build Tools
+       run: |
+         sudo apt-get update
+         sudo apt-get install -y build-essential devscripts debhelper dh-python
 
-      - name: Install NFPM
-        run: go install github.com
+      -name: Create Upstream Tarball Source
+       run: |
+         tar --exclude='./debian' --exclude='./.git' czf ../hwfinance_1.0.0.orig.tar.gz .
 
-      - name: Upload Package to GitHub Releases
-        uses: softprops/action-gh-release@v2
-        with:
-          files: hwfinance.deb
+      -name: Compile Debian Source Structure
+       run: dpkg-buildpackage -S -us -uc
+
+      -name: Upload Source Bundles to GitHub Release
+       uses: softprops/action-gh-release@v2
+       with:
+         files: |
+           ../hwfinance_1.0.0-1.dsc
+           ../hwfinance_1.0.0-1.debian.tar.xz
+           ../hwfinance_1.0.0.orig.tar.gz

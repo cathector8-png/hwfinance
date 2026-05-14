@@ -1,0 +1,12 @@
+Source: hwfinance
+Section: utils
+Priority: optional
+Maintainer: Hector Wakim <cat.hector8@gmail.com>
+Build-depends: debhelper-compat (= 13), dh-python, python3-all
+Standards-Version: 4.7.0
+Homepage: github.com
+
+Package: hwfinance
+Architecture: all
+Depends: ${python3:Depends}, ${misc:Depends}, python3-pandas, python3-pip
+Description: Finance tracking and calculating tool
