@@ -11,6 +11,7 @@ license: "GPL-3.0"
 depends: 
   - python3
   - python3-pandas
+  - python3-pip
 contents:
-  - src: "hwfinance"
+  - src: "TheBrains.py"
     dst: "/usr/bin/hwfinance"
