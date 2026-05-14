@@ -12,6 +12,8 @@ depends:
   - python3
   - python3-pandas
   - python3-pip
+scripts:
+  postinstall: "scripts/postinstall.sh"
 contents:
   - src: "TheBrains.py"
     dst: "/usr/bin/hwfinance"
