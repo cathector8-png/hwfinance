@@ -1,31 +1,27 @@
 name: Build Debian Source Package
 on:
-  push:
-    tags:
-      - 'v*'
+ push:
+ tags:
+ - 'v*'
 jobs:
-  source-build:
-    runs-on: ubuntu latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      -name: Install Debian Build Tools
-       run: |
-         sudo apt-get update
-         sudo apt-get install -y build-essential devscripts debhelper dh-python
-
-      -name: Create Upstream Tarball Source
-       run: |
-         tar --exclude='./debian' --exclude='./.git' czf ../hwfinance_1.0.0.orig.tar.gz .
-
-      -name: Compile Debian Source Structure
-       run: dpkg-buildpackage -S -us -uc
-
-      -name: Upload Source Bundles to GitHub Release
-       uses: softprops/action-gh-release@v2
-       with:
-         files: |
-           ../hwfinance_1.0.0-1.dsc
-           ../hwfinance_1.0.0-1.debian.tar.xz
-           ../hwfinance_1.0.0.orig.tar.gz
+ source-build:
+ runs-on: ubuntu-latest
+ steps:
+ - name: Checkout Code
+ uses: actions/checkout@v4
+ - name: Install Debian Build Tools
+ run: |
+ sudo apt-get update
+ sudo apt-get install -y build-essential devscripts debhelper dh-python
+ - name: Create Upstream Tarball Source
+ run: |
+ tar --exclude='./debian' --exclude='./.git' -czf ../hwfinance_1.0.0.orig.tar.gz .
+ - name: Compile Debian Source Structure
+ run: dpkg-buildpackage -S -us -uc
+ - name: Upload Source Bundles to GitHub Release
+ uses: softprops/action-gh-release@v2
+ with:
+ files: |
+ ../hwfinance_1.0.0-1.dsc
+ ../hwfinance_1.0.0-1.debian.tar.xz
+ ../hwfinance_1.0.0.orig.tar.gz
