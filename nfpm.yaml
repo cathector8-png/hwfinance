@@ -1,0 +1,13 @@
+name: "hwfinance"
+arch: "amd64"
+platform: "linux"
+version: "1.0.0"
+section: "default"
+priority: "optional"
+maintainter: "Hector Wakim cat.hector8@gmail.com"
+description: "Finance tracking and caclulation tool@
+homepage: "https://github.com"
+license: "GPL-3.0"
+contents:
+ - src: "hwfinance"
+   dst: "/usr/bin/hwfinance"
