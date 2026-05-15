@@ -1,7 +1,7 @@
-I am working on adding it to linux as a package,
-
-The command to install it will be:
-    sudo apt install hwfinance 
+### Installation (Debian/Kali/Ubuntu)
+1. Add the repository:
+   ```bash
+   echo "deb [trusted=yes] [https://cathector8-png.github.io/hwfinance/repo/](https://cathector8-png.github.io/hwfinance/repo/) ./" | sudo tee /etc/apt/sources.list.d/hwfinance.list
 For help enter hwfinance --help
 
 
