@@ -1,36 +1,43 @@
 name: Build Debian Source Package
 
 on:
-push:
-tags:
-- 'v*'
+  push:
+    tags:
+      - 'v*'
 
 jobs:
-source-build:
-runs-on: ubuntu-latest
-steps:
-- name: Checkout Code
-uses: actions/checkout@v4
+  source-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-- name: Install Debian Build Tools
-run: |
-sudo apt-get update
-sudo apt-get install -y build-essential devscripts debhelper dh-python
+      - name: Extract Version from Git Tag
+        id: pre_req
+        run: |
+          # Strips the 'v' from the tag (e.g., v1.0.0 -> 1.0.0)
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "VERSION=${TAG_VERSION}" >> $GITHUB_ENV
 
-- name: Create Upstream Tarball Source
-run: |
-# Create the .orig.tar.gz in the parent directory as required by Debian tools
-tar --exclude='./debian' --exclude='./.git' -czf ../hwfinance_1.0.0.orig.tar.gz .
+      - name: Install Debian Build Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential devscripts debhelper dh-python
 
-- name: Compile Debian Source Structure
-run: dpkg-buildpackage -S -us -uc
+      - name: Create Upstream Tarball Source
+        run: |
+          # Dynamically uses the extracted version for the orig.tar.gz file
+          tar --exclude='./debian' --exclude='./.git' -czf ../hwfinance_${{ env.VERSION }}.orig.tar.gz .
 
-- name: Upload Source Bundles to GitHub Release
-uses: softprops/action-gh-release@v2
-if: startsWith(github.ref, 'refs/tags/')
-with:
-files: |
-../hwfinance_1.0.0-1.dsc
-../hwfinance_1.0.0-1.debian.tar.xz
-../hwfinance_1.0.0.orig.tar.gz
-../hwfinance_1.0.0-1_source.changes
+      - name: Compile Debian Source Structure
+        run: dpkg-buildpackage -S -us -uc
+
+      - name: Upload Source Bundles to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            ../hwfinance_${{ env.VERSION }}-1.dsc
+            ../hwfinance_${{ env.VERSION }}-1.debian.tar.xz
+            ../hwfinance_${{ env.VERSION }}.orig.tar.gz
+            ../hwfinance_${{ env.VERSION }}-1_source.changes
