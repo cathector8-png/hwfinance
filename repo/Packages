@@ -1,0 +1,17 @@
+Package: hwfinance
+Architecture: all
+Version: 1.1.0
+Priority: optional
+Section: utils
+Maintainer: Hector Wakim <cat.hector8@gmail.com>
+Installed-Size: 24
+Depends: python3-pandas, python3-yfinance
+Filename: ./hwfinance_1.1.0_all.deb
+Size: 5380
+MD5sum: fc282703a393e3f3e66e08824a583902
+SHA1: 4db4ef1b72b52a22bc36d23f1765f64b7e78cbcc
+SHA256: a34754463f6b6f4555be6f77b654f7be0e760d1789d9b9922ab4090f61c28920
+SHA512: ad8126b49ee124128e7cc8f727ada204a9d0a4fa858417caf051b4daf8cb821e29a9d253be1643731ada5f85215eae54701100d8ad6ac6d28345255ebffbbdb0
+Homepage: github.com
+Description: Finance tracking and calculating tool
+
