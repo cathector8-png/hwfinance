@@ -19,22 +19,16 @@ jobs:
 
       - name: Prepare Source Directory
         run: |
-          # Extract version from tag (e.g., v1.0.15 -> 1.0.15)
           VERSION=${GITHUB_REF_NAME#v}
           mkdir -p hwfinance-${VERSION}
-          
-          # Copy source files and debian folder
           cp -r debian hwfinance-${VERSION}/
-          cp hwfinance.py hwfinance-${VERSION}/
-          
-          # Create the required upstream tarball
+          cp hwfinance.py hwfinance-${VERSION}/hwfinance
           tar -czvf hwfinance_${VERSION}.orig.tar.gz hwfinance-${VERSION}
 
       - name: Compile Debian Package
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           cd hwfinance-${VERSION}
-          # Build the binary package without signing (since we aren't in Launchpad yet)
           dpkg-buildpackage -us -uc -b
 
       - name: Upload to Release
