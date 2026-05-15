@@ -2,7 +2,24 @@
 1. Add the repository:
    ```bash
    echo "deb [trusted=yes] [https://cathector8-png.github.io/hwfinance/repo/](https://cathector8-png.github.io/hwfinance/repo/) ./" | sudo tee /etc/apt/sources.list.d/hwfinance.list
-For help enter hwfinance --help
+   sudo apt update && sudo apt install hwfinance
+   pip install yfinance pandas --break-system-packages
+
+
+### 2. Manual Installation (Universal GNU/Linux)
+This works on any Linux flavor (Arch, Fedora, etc.) because it doesn't rely on `apt`.
+
+```markdown
+### Universal Manual Install
+1. Clone the repo:
+   ```bash
+   git clone [https://github.com/cathector8-png/hwfinance.git](https://github.com/cathector8-png/hwfinance.git)
+   cd hwfinance
+   pip install -r Requirements
+   chmod +x TheBrains.py
+   sudo ln -s $(pwd)/TheBrains.py /usr/bin/hwfinance
+For help enter:
+```hwfinance --help```
 
 
 [![Platform: Linux](https://shields.io)](https://linux.org)
