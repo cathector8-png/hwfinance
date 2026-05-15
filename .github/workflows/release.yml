@@ -12,28 +12,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Debian Packaging Tools
+      - name: Install Tools
         run: |
           sudo apt-get update
           sudo apt-get install -y debhelper devscripts build-essential python3-all dh-python
 
-      - name: Prepare Source Directory
+      - name: Build Package
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           mkdir -p hwfinance-${VERSION}
           cp -r debian hwfinance-${VERSION}/
-          cp hwfinance.py hwfinance-${VERSION}/hwfinance
+          cp hwfinance hwfinance-${VERSION}/
           tar -czvf hwfinance_${VERSION}.orig.tar.gz hwfinance-${VERSION}
-
-      - name: Compile Debian Package
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
           cd hwfinance-${VERSION}
           dpkg-buildpackage -us -uc -b
 
-      - name: Upload to Release
+      - name: Upload
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: |
-            *.deb
+          files: "*.deb"
