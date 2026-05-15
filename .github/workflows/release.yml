@@ -1,4 +1,4 @@
-name: Build and Host Debian Package
+name: Build Debian Package
 
 on:
   push:
@@ -29,11 +29,10 @@ jobs:
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-          git checkout -b gh-pages || git checkout gh-pages
+          git checkout gh-pages || git checkout -b gh-pages
           mkdir -p repo
           cp ../*.deb repo/
           cd repo
-          # Create the index file APT needs to find your package
           apt-ftparchive packages . > Packages
           gzip -k -f Packages
           cd ..
