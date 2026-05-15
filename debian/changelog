@@ -1,4 +1,4 @@
-hwfinance (1.1.0) unstable; urgency=low
+hwfinance (1.1.1) unstable; urgency=low
 
   * Automated build via GitHub Actions.
   * Fixed dh_install path for hwfinance script.
