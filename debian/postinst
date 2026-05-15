@@ -1,9 +1,7 @@
 #!/bin/sh
 set -e
 
-# Ensure the binary is executable just in case
+# Make sure the binary is executable
 chmod +x /usr/bin/hwfinance
-
-echo "hwfinance has been successfully installed."
 
 exit 0
