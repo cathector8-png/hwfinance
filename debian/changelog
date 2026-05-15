@@ -1,1 +1,7 @@
 hwfinance (1.0.15) unstable; urgency=low
+
+  * Automated build via GitHub Actions.
+  * Fixed dh_install path for hwfinance script.
+  * Updated post-install permissions.
+
+ -- Hector Wakim <cat.hector8@gmail.com>  Fri, 15 May 2026 14:00:00 +0000
