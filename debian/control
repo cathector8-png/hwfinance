@@ -8,5 +8,5 @@ Homepage: github.com
 
 Package: hwfinance
 Architecture: all
-Depends: ${python3:Depends}, ${misc:Depends}, python3-pandas, python3-pip
+Depends: ${python3:Depends}, ${misc:Depends}, python3-pandas, python3-yfinance
 Description: Finance tracking and calculating tool
