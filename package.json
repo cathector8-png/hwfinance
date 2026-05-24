@@ -1,0 +1,16 @@
+{
+  "name": "hwfinance",
+  "version": "1.0.0",
+  "description": "Asynchronous quantitative research and market regime engine",
+  "main": "bin/index.js",
+  "bin": {
+    "hwfinance": "./bin/index.js"
+  },
+  "files": [
+    "bin/",
+    "hwfinance",
+    "requirements.txt"
+  ],
+  "author": "Hector",
+  "license": "MIT"
+}
