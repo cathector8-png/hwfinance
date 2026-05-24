@@ -3,14 +3,18 @@
 const { spawn } = require('child_process');
 const path = require('path');
 
-// Point this directly to your root 'hwfinance' Python script
 const scriptPath = path.join(__dirname, '../hwfinance');
 
-// Spawn python3 to run your script, passing along any trailing terminal arguments
 const pythonProcess = spawn('python3', [scriptPath, ...process.argv.slice(2)], {
-    stdio: 'inherit' // Passes terminal inputs and color outputs straight to the user
+    stdio: 'inherit'
 });
 
 pythonProcess.on('error', (err) => {
-    console.error('Failed to run hwfinance core engine:', err);
+    console.error('CRITICAL: Failed to initialize hwfinance core engine.');
+    console.error('Ensure python3 is installed and accessible in your system PATH.');
+    process.exit(1);
+});
+
+pythonProcess.on('close', (code) => {
+    process.exit(code);
 });
