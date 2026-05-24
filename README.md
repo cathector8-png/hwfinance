@@ -18,6 +18,7 @@ This works on any Linux flavor (Arch, Fedora, etc.) because it doesn't rely on `
    pip install -r Requirements
    chmod +x TheBrains.py
    sudo ln -s $(pwd)/TheBrains.py /usr/bin/hwfinance
+   ```
 For help enter:
 ```hwfinance --help```
 
