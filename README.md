@@ -10,15 +10,22 @@
 This works on any Linux flavor (Arch, Fedora, etc.) because it doesn't rely on `apt`.
 
 ```markdown
-### Universal Manual Install
-1. Clone the repo:
-   ```bash
-   git clone [https://github.com/cathector8-png/hwfinance.git](https://github.com/cathector8-png/hwfinance.git)
-   cd hwfinance
-   pip install -r Requirements
-   chmod +x TheBrains.py
-   sudo ln -s $(pwd)/TheBrains.py /usr/bin/hwfinance
+# 1. Clone the repository cleanly without the markdown formatting
+git clone https://github.com/cathector8-png/hwfinance.git
+
+# 2. Move into the directory
+cd hwfinance
+
+# 3. Install the requirements (check if it's lowercase or has .txt if this fails)
+pip install -r requirements.txt
+
+# 4. Make the main script executable
+chmod +x TheBrains.py
+
+# 5. Create the global symlink so you can run 'hwfinance' from anywhere
+sudo ln -s $(pwd)/TheBrains.py /usr/local/bin/hwfinance
    ```
+   
 For help enter:
 ```hwfinance --help```
 
