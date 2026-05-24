@@ -1,16 +1,29 @@
 {
   "name": "hwfinance",
-  "version": "1.0.0",
+  "version": "1.1.1",
   "description": "Asynchronous quantitative research and market regime engine",
   "main": "bin/index.js",
   "bin": {
     "hwfinance": "./bin/index.js"
   },
   "files": [
-    "bin/",
+    "bin/index.js",
     "hwfinance",
     "requirements.txt"
   ],
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "finance",
+    "quant",
+    "jepa",
+    "trading",
+    "cli"
+  ],
   "author": "Hector",
-  "license": "MIT"
+  "license": "GPL-3.0-or-later",
+  "engines": {
+    "node": ">=18.0.0"
+  }
 }
