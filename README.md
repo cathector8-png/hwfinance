@@ -46,7 +46,6 @@ For help enter:
 ## Command Matrix & Operational Syntax
 
 ### Execution Pattern
-```bash
 hwfinance <ticker> [flags]
 ```
 
