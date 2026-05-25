@@ -37,9 +37,6 @@ For help enter:
 
 ---
 
-##  Native Debian/Ubuntu Installation
-
-To compile and build `hwfinance` as an integrated, native GNU/Linux package, execute the following commands in your shell:
 
 
 ```
