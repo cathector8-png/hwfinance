@@ -10,20 +10,8 @@
 This works on any Linux flavor (Arch, Fedora, etc.) because it doesn't rely on `apt`.
 
 ```markdown
-# 1. Clone the repository cleanly without the markdown formatting
-git clone https://github.com/cathector8-png/hwfinance.git
-
-# 2. Move into the directory
-cd hwfinance
-
-# 3. Install the requirements (check if it's lowercase or has .txt if this fails)
-pip install -r requirements.txt
-
-# 4. Make the main script executable
-chmod +x TheBrains.py
-
-# 5. Create the global symlink so you can run 'hwfinance' from anywhere
-sudo ln -s $(pwd)/TheBrains.py /usr/local/bin/hwfinance
+npm install hwfinance
+python3 install yfinance pandas agparse
    ```
    
 For help enter:
