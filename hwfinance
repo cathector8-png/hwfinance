@@ -26,7 +26,7 @@ CURRENCY_SYMBOLS = {
 def print_custom_help():
     """Renders a comprehensive terminal help matrix detailing syntax, format rules, and capabilities."""
     print(f"\n{C_GREEN}+-----------------------------------------------------------------------+")
-    print(f"|                       {C_BOLD}HWFINANCE - CLI ENGINE MANUAL{C_RESET}{C_GREEN}                           |")
+    print(f"|                       {C_BOLD}HWFINANCE - CLI ENGINE MANUAL{C_RESET}{C_GREEN}                               |")
     print(f"|                       made by hector wakim                            |")
     print(f"+-----------------------------------------------------------------------+{C_RESET}")
     print(f"\n{C_BOLD}USAGE SNTX:{C_RESET}")
@@ -37,9 +37,10 @@ def print_custom_help():
     print(f"  {C_CYAN}--pull <option>{C_RESET}  Extract live market data points directly.")
     print(f"                 Options: {C_WHITE}all, stock-price, market-cap, dividend-yield, total-debt{C_RESET}")
     print(f"  {C_CYAN}--calc <option>{C_RESET}  Execute corporate finance logic valuation formulas.")
-    print(f"                 Options: {C_WHITE}all, fcf, dcf, ev, fcf-yield{C_RESET}")
-    print(f"  {C_CYAN}--base <ISO>{C_RESET}     Override asset currency. Auto-converts to target index.")
+    print(f"                 Options: {C_WHITE}all, fcf, dcf, ev, fcf-yield, multiples{C_RESET}")
+    print(f"  {C_CYAN}--base <ISO>{C_RESET}      Override asset currency. Auto-converts to target index.")
     print(f"                 Examples: {C_WHITE}--base USD, --base EUR, --base GBP{C_RESET}")
+    print(f"  {C_CYAN}--json{C_RESET}            Output raw program state structures for pipeline automation.")
     
     print(f"\n{C_BOLD}INTERNATIONAL TICKER SYNTAX GUIDE:{C_RESET}")
     print(f"  To analyze international equities accurately, append the regional market suffix:")
@@ -56,12 +57,11 @@ def print_custom_help():
     
     print(f"\n{C_BOLD}EXAMPLES OF CORRECT COMMANDS:{C_RESET}")
     print(f"  hwfinance AAPL --pull all                     {C_GREEN}# Pull everything for Apple in USD{C_RESET}")
-    print(f"  hwfinance BARC.L --calc all                   {C_GREEN}# Compute complex calculations for Barclays in GBP{C_RESET}")
+    print(f"  hwfinance BARC.L --calc all --json            {C_GREEN}# Output raw calculations via pipeline objects{C_RESET}")
     print(f"  hwfinance 7203.T --pull stock-price --base EUR {C_GREEN}# Get Toyota price converted to Euros{C_RESET}")
     print(f"{C_GREEN}+-----------------------------------------------------------------------+{C_RESET}\n")
 
 class CustomArgumentParser(argparse.ArgumentParser):
-    """Intercepts standard argument errors to force the output of our custom terminal help manual."""
     def error(self, message):
         print(f"\n{C_RED}{C_BOLD}SYNTAX ERROR DETECTED:{C_RESET} {message}")
         print_custom_help()
@@ -69,22 +69,17 @@ class CustomArgumentParser(argparse.ArgumentParser):
 
 def get_free_proxy_list():
     try:
-        url = "proxyscrape.com"
+        url = "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=4000&country=all&ssl=all&anonymity=all"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=5) as response:
-            proxies = response.read().decode('utf-8').strip().split('\r\n')
-            if not proxies or len(proxies) < 5:
-                url_b = "proxy-list.download"
-                req_b = urllib.request.Request(url_b, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req_b, timeout=5) as res_b:
-                    proxies = res_b.read().decode('utf-8').strip().split('\r\n')
-            return [p for p in proxies if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$', p)]
+        with urllib.request.urlopen(req, timeout=4) as response:
+            proxies = response.read().decode('utf-8').strip().split('\n')
+            return [p.strip() for p in proxies if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$', p.strip())]
     except:
         return []
 
 def query_public_fallback(ticker_symbol):
     symbol_clean = ticker_symbol.upper()
-    url = f"yahoo.com{symbol_clean}?interval=1d&range=1d"
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol_clean}?interval=1d&range=1d"
     proxies = get_free_proxy_list()
     random.shuffle(proxies)
     
@@ -92,13 +87,14 @@ def query_public_fallback(ticker_symbol):
         try:
             proxy_handler = urllib.request.ProxyHandler({'http': proxy, 'https': proxy})
             opener = urllib.request.build_opener(proxy_handler)
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (X11; Linux)'})
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
             with opener.open(req, timeout=4) as response:
                 json_data = json.loads(response.read().decode())
-                meta = json_data['chart']['result']['meta']
+                meta = json_data['chart']['result'][0]['meta']
                 return {
                     "price": float(meta.get('regularMarketPrice', 0.0)),
                     "market_cap": 0.0, "dividend_yield": 0.0, "total_debt": 0.0, "cash": 0.0, "fcf": 0.0,
+                    "ebitda": 0.0, "beta": 1.0, "shares_outstanding": 1.0, "revenue_growth": 0.03,
                     "currency": meta.get('currency', 'USD'), "proxy_used": proxy
                 }
         except:
@@ -130,6 +126,7 @@ def get_ticker_data(ticker_symbol, base_currency=None):
         info = ticker.info
         fast_info = ticker.fast_info
         cashflow = ticker.cashflow
+        financials = ticker.financials
         
         if not info or 'currency' not in info:
             raise ValueError("Primary endpoint parsing timeout.")
@@ -139,14 +136,38 @@ def get_ticker_data(ticker_symbol, base_currency=None):
         div_yield = info.get('dividendYield') or 0.0
         raw_total_debt = info.get('totalDebt') or 0.0
         raw_cash = info.get('totalCash') or 0.0
+        raw_ebitda = info.get('ebitda') or 0.0
+        raw_beta = info.get('beta') or 1.0
+        raw_shares = info.get('sharesOutstanding') or 1.0
         native_currency = info.get('currency', 'USD')
         
+        # 1. Historical Revenue Growth Calculations
+        revenue_growth = 0.03 # Standard baseline fallback
+        if not financials.empty and 'Total Revenue' in financials.index:
+            rev_series = financials.loc['Total Revenue']
+            if len(rev_series) >= 2 and rev_series.iloc[1] > 0:
+                revenue_growth = (rev_series.iloc[0] - rev_series.iloc[1]) / rev_series.iloc[1]
+                revenue_growth = max(-0.10, min(revenue_growth, 0.30)) # Cap extreme outliers
+
+        # 2. Multi-Year Free Cash Flow Historical Smoothing
         raw_fcf = 0.0
         if not cashflow.empty:
-            ocf = cashflow.get('Operating Cash Flow') or cashflow.get('Total Cash From Operating Activities')
-            capex = cashflow.get('Capital Expenditures') or cashflow.get('Total Cash From Investing Activities')
-            if ocf is not None and capex is not None:
-                raw_fcf = float(ocf.iloc + capex.iloc)
+            ocf_labels = ['Operating Cash Flow', 'Total Cash From Operating Activities']
+            capex_labels = ['Capital Expenditures', 'Capital Expenditure']
+            ocf_series = next((cashflow.loc[lbl] for lbl in ocf_labels if lbl in cashflow.index), None)
+            capex_series = next((cashflow.loc[lbl] for lbl in capex_labels if lbl in cashflow.index), None)
+            
+            if ocf_series is not None:
+                fcf_history = []
+                for i in range(min(4, len(ocf_series))):
+                    ocf_val = ocf_series.iloc[i]
+                    capex_val = capex_series.iloc[i] if capex_series is not None and i < len(capex_series) else 0.0
+                    
+                    ocf_val = ocf_val if (ocf_val == ocf_val and ocf_val is not None) else 0.0
+                    capex_val = capex_val if (capex_val == capex_val and capex_val is not None) else 0.0
+                    fcf_history.append(ocf_val + capex_val)
+                
+                raw_fcf = sum(fcf_history) / len(fcf_history) if fcf_history else 0.0
                 
     except Exception as e:
         try:
@@ -157,6 +178,10 @@ def get_ticker_data(ticker_symbol, base_currency=None):
             raw_total_debt = fallback_data["total_debt"]
             raw_cash = fallback_data["cash"]
             raw_fcf = fallback_data["fcf"]
+            raw_ebitda = fallback_data["ebitda"]
+            raw_beta = fallback_data["beta"]
+            raw_shares = fallback_data["shares_outstanding"]
+            revenue_growth = fallback_data["revenue_growth"]
             native_currency = fallback_data["currency"]
             proxy_info = fallback_data["proxy_used"]
             used_fallback = True
@@ -167,7 +192,8 @@ def get_ticker_data(ticker_symbol, base_currency=None):
 
     if native_currency in ['GBp', 'GBX']:
         if raw_price > 10.0: raw_price /= 100.0
-        raw_market_cap /= 100.0; raw_total_debt /= 100.0; raw_cash /= 100.0; raw_fcf /= 100.0
+        raw_market_cap /= 100.0; raw_total_debt /= 100.0; raw_cash /= 100.0
+        raw_fcf /= 100.0; raw_ebitda /= 100.0
         native_currency = 'GBP'
 
     target_curr = base_currency.upper() if base_currency else native_currency
@@ -178,6 +204,8 @@ def get_ticker_data(ticker_symbol, base_currency=None):
         "price": float(raw_price * fx_rate), "market_cap": float(raw_market_cap * fx_rate),
         "dividend_yield": float(div_yield), "total_debt": float(raw_total_debt * fx_rate),
         "cash": float(raw_cash * fx_rate), "fcf": float(raw_fcf * fx_rate),
+        "ebitda": float(raw_ebitda * fx_rate), "beta": float(raw_beta),
+        "shares_outstanding": float(raw_shares), "revenue_growth": float(revenue_growth),
         "currency_symbol": CURRENCY_SYMBOLS.get(target_curr, f"{target_curr} "),
         "native_currency": native_currency, "display_currency": target_curr,
         "fallback_triggered": used_fallback, "proxy_used": proxy_info
@@ -185,7 +213,7 @@ def get_ticker_data(ticker_symbol, base_currency=None):
 
 def print_table_header(title, symbol, currency, fallback_triggered, proxy_used):
     provider_status = f"{C_YELLOW}Proxy: {proxy_used}{C_RESET}" if fallback_triggered else f"{C_CYAN}[yFinance Direct]{C_RESET}"
-    print(f"\n{C_GREEN}+-----------------------------------------------------------+{C_RESET}")
+    print(f"\n{C_GREEN}+-----------------------------------------------------------+")
     print(f"{C_GREEN}| {C_BOLD}{title:<32}{C_RESET}{C_GREEN} | Ticker: {C_CYAN}{symbol:<8}{C_RESET}{C_GREEN} | Unit: {C_CYAN}{currency:<3}{C_RESET}{C_GREEN} |{C_RESET}")
     print(f"{C_GREEN}| {C_WHITE}made by hector wakim{C_RESET:<38}{C_GREEN} | Net IP: {provider_status:<22} {C_GREEN}|{C_RESET}")
     print(f"{C_GREEN}+-------------------------------------+---------------------+{C_RESET}")
@@ -197,7 +225,10 @@ def print_table_footer():
     print(f"{C_GREEN}+-------------------------------------+---------------------+{C_RESET}\n")
 
 def handle_pull(args, data):
-    print_table_header("REFINANCE", data['symbol'], data['display_currency'], data['fallback_triggered'], data['proxy_used'])
+    if args.json:
+        print(json.dumps(data, indent=4))
+        return
+    print_table_header("HWFINANCE", data['symbol'], data['display_currency'], data['fallback_triggered'], data['proxy_used'])
     show_all = (args.pull == 'all')
     cs = data['currency_symbol']
     if show_all or args.pull == 'stock-price': print_table_row("Stock Price", f"{cs}{data['price']:,.2f}")
@@ -207,44 +238,90 @@ def handle_pull(args, data):
     print_table_footer()
 
 def handle_calc(args, data):
-    print_table_header("REFINANCE", data['symbol'], data['display_currency'], data['fallback_triggered'], data['proxy_used'])
-    show_all = (args.calc == 'all')
-    cs = data['currency_symbol']
-    
+    # Basic core valuations
     ev = data['market_cap'] + data['total_debt'] - data['cash']
+    net_debt = data['total_debt'] - data['cash']
     fcf_yield = (data['fcf'] / data['market_cap']) if data['market_cap'] > 0 else 0.0
+    p_fcf = (data['market_cap'] / data['fcf']) if data['fcf'] > 0 else 0.0
+    ev_ebitda = (ev / data['ebitda']) if data['ebitda'] > 0 else 0.0
+    nd_ebitda = (net_debt / data['ebitda']) if data['ebitda'] > 0 else 0.0
     
-    discount_rate, growth_rate = 0.10, 0.03
+    # Capital Asset Pricing Model (CAPM) Cost of Equity
+    rf = 0.040     # Baseline 10-Year Treasury Yield
+    erp = 0.055    # Equity Risk Premium Baseline
+    discount_rate = max(0.05, min(rf + (data['beta'] * erp), 0.15)) # Floor at 5%, Cap at 15%
+    
+    # Two-Stage DCF Valuation Runway Core (Years 1-10)
     present_value_fcf = 0.0
     projected_fcf = data['fcf']
+    high_growth = data['revenue_growth']
+    terminal_growth = 0.025 # Baseline GDP tracking proxy
+    
+    # Phase 1: High Growth Runway Phase (Years 1-5)
     for year in range(1, 6):
-        projected_fcf *= (1 + growth_rate)
+        projected_fcf *= (1 + high_growth)
         present_value_fcf += projected_fcf / ((1 + discount_rate) ** year)
-    terminal_value = (projected_fcf * (1 + growth_rate)) / (discount_rate - growth_rate)
-    dcf_intrinsic_value = present_value_fcf + (terminal_value / ((1 + discount_rate) ** 5))
+        
+    # Phase 2: Deceleration Fade Stage (Years 6-10)
+    current_growth = high_growth
+    for year in range(6, 11):
+        current_growth -= (high_growth - terminal_growth) / 5
+        projected_fcf *= (1 + current_growth)
+        present_value_fcf += projected_fcf / ((1 + discount_rate) ** year)
+        
+    # Terminal Value Formulation via Gordon Growth at Year 10
+    terminal_value = (projected_fcf * (1 + terminal_growth)) / (discount_rate - terminal_growth)
+    terminal_value_pv = terminal_value / ((1 + discount_rate) ** 10)
+    
+    # Derive Implied Values
+    dcf_enterprise_value = present_value_fcf + terminal_value_pv
+    dcf_equity_value = dcf_enterprise_value - data['total_debt'] + data['cash']
+    intrinsic_value_per_share = max(0.0, dcf_equity_value / data['shares_outstanding'])
 
-    if show_all or args.calc == 'fcf': print_table_row("Free Cash Flow (FCF)", f"{cs}{data['fcf']:,.0f}")
-    if show_all or args.calc == 'ev': print_table_row("Enterprise Value (EV)", f"{cs}{ev:,.0f}")
-    if show_all or args.calc == 'fcf-yield': print_table_row("Free Cash Flow Yield", f"{fcf_yield * 100:.2f}%")
-    if show_all or args.calc == 'dcf': print_table_row("DCF Intrinsic Market Value", f"{cs}{dcf_intrinsic_value:,.0f}")
+    if args.json:
+        calc_out = {
+            "enterprise_value": ev, "net_debt": net_debt, "fcf_yield": fcf_yield, "price_to_fcf": p_fcf,
+            "ev_ebitda": ev_ebitda, "net_debt_ebitda": nd_ebitda, "capm_discount_rate": discount_rate,
+            "dcf_enterprise_value": dcf_enterprise_value, "intrinsic_value_per_share": intrinsic_value_per_share
+        }
+        print(json.dumps({**data, **calc_out}, indent=4))
+        return
+
+    print_table_header("HWFINANCE", data['symbol'], data['display_currency'], data['fallback_triggered'], data['proxy_used'])
+    show_all = (args.calc == 'all')
+    cs = data['currency_symbol']
+
+    if show_all or args.calc == 'fcf': 
+        print_table_row("Smoothed Avg FCF (Historical)", f"{cs}{data['fcf']:,.0f}")
+    if show_all or args.calc == 'ev': 
+        print_table_row("Enterprise Value (EV)", f"{cs}{ev:,.0f}")
+    if show_all or args.calc == 'fcf-yield': 
+        print_table_row("Free Cash Flow Yield", f"{fcf_yield * 100:.2f}%")
+    if show_all or args.calc == 'multiples':
+        print_table_row("Price / FCF Multiples", f"{p_fcf:.2f}x" if p_fcf > 0 else "N/A")
+        print_table_row("EV / EBITDA Multiples", f"{ev_ebitda:.2f}x" if ev_ebitda > 0 else "N/A")
+        print_table_row("Net Debt / EBITDA Ratio", f"{nd_ebitda:.2f}x" if data['ebitda'] > 0 else "N/A")
+    if show_all or args.calc == 'dcf': 
+        print_table_row("Calculated Growth Runway Rate", f"{high_growth * 100:.2f}%")
+        print_table_row("Dynamic Cost of Equity (CAPM)", f"{discount_rate * 100:.2f}%")
+        print_table_row("2-Stage Implied Enterprise Val", f"{cs}{dcf_enterprise_value:,.0f}")
+        print_table_row("Intrinsic Target Price/Sh", f"{cs}{intrinsic_value_per_share:,.2f}")
     print_table_footer()
 
 def main():
-    # Use custom error parser to trap all wrong syntax entries 
     parser = CustomArgumentParser(description="Global Linux Terminal Financial Command Engine", add_help=False)
     
-    # Enable common help flags
     parser.add_argument("-h", "--help", action="store_true")
     parser.add_argument("ticker", nargs="?", help="Global stock exchange symbol token")
     parser.add_argument("--base", help="Target currency override ISO code")
+    parser.add_argument("--json", action="store_true", help="Format response as raw JSON mapping objects")
     
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--pull", choices=['all', 'market-cap', 'stock-price', 'dividend-yield', 'total-debt'])
-    group.add_argument("--calc", choices=['all', 'fcf', 'dcf', 'ev', 'fcf-yield'])
+    group.add_argument("--calc", choices=['all', 'fcf', 'dcf', 'ev', 'fcf-yield', 'multiples'])
 
     args = parser.parse_args()
 
-    # Trigger help page manually or on missing parameters
     if args.help or not args.ticker or (not args.pull and not args.calc):
         print_custom_help()
         sys.exit(0)
@@ -257,4 +334,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-            
