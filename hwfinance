@@ -26,7 +26,7 @@ CURRENCY_SYMBOLS = {
 def print_custom_help():
     """Renders a comprehensive terminal help matrix detailing syntax, format rules, and capabilities."""
     print(f"\n{C_GREEN}+-----------------------------------------------------------------------+")
-    print(f"|                       {C_BOLD}REFINANCE - CLI ENGINE MANUAL{C_RESET}{C_GREEN}                           |")
+    print(f"|                       {C_BOLD}HWFINANCE - CLI ENGINE MANUAL{C_RESET}{C_GREEN}                           |")
     print(f"|                       made by hector wakim                            |")
     print(f"+-----------------------------------------------------------------------+{C_RESET}")
     print(f"\n{C_BOLD}USAGE SNTX:{C_RESET}")
