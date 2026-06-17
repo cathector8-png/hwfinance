@@ -1,96 +1,77 @@
-### Installation (Debian/Kali/Ubuntu)
-1. Add the repository:
-   ```bash
-   echo "deb [trusted=yes] [https://cathector8-png.github.io/hwfinance/repo/](https://cathector8-png.github.io/hwfinance/repo/) ./" | sudo tee /etc/apt/sources.list.d/hwfinance.list
-   sudo apt update && sudo apt install hwfinance
-   pip install yfinance pandas mplfinance alpaca-trade-api --break-system-packages
+# hwfinance 
 
+[![Platform: Linux](https://img.shields.io/badge/Platform-Linux-blue.svg)](https://linux.org)
+[![Language: Python 3](https://img.shields.io/badge/Language-Python%203-yellow.svg)](https://python.org)
+[![Engine: yFinance](https://img.shields.io/badge/Engine-yFinance-green.svg)](https://github.com/ranarousset/yfinance)
 
-### 2. Manual Installation (Universal GNU/Linux)
-This works on any Linux flavor (Arch, Fedora, etc.) because it doesn't rely on `apt`.
+**hwfinance** is a high-density, zero-key command-line financial analysis engine built natively for Linux. Query live pricing data, structural balance sheet metrics, and evaluate valuation modeling matrices across global exchanges instantly.
 
-```markdown
-### Universal Manual Install
-1. Clone the repo:
-   ```bash
-   git clone https://github.com/cathector8-png/hwfinance.git
-   cd hwfinance
-   pip install -r Requirements
-   chmod +x hwfinance
-   sudo ln -s $(pwd)/hwfinance /usr/bin/hwfinance
-   ```
-For help enter:
-```hwfinance --help```
-
-
-[![Platform: Linux](https://shields.io)](https://linux.org)
-[![Language: Python 3](https://shields.io)](https://python.org)
-
-> **hwfinance** is a high-density, zero-key command-line financial analysis engine built natively for Linux. Query live pricing data, structural balance sheet metrics, and evaluate valuation modeling matrices across global exchanges instantly.
-
-*Made by Hector Wakim*
+*Created by Hector Wakim*
 
 ---
 
-## 🚀 Key Capabilities
+## Key Capabilities
 
 *   **Multi-Exchange Engine:** Cross-resolves equities natively across **NASDAQ, NYSE, LSE, TSE, DAX, TSX, ASX, NSE, and Euronext**.
 *   **High-Fidelity Charting:** Render professional line and candlestick charts with volume and moving averages (MA20, MA50) using `mplfinance`.
 *   **Integrated Trading:** Submit live or paper trades via the **Alpaca Trade API** integration.
-*   **Zero-Key API Fallback:** Bypasses external subscription keys and rate limits by shifting to unauthenticated backup endpoints.
-*   **Active IP Proxy Rotation:** Randomizes your network footprint through public proxy lists if primary data streams get flagged.
+*   **Zero-Key API Fallback:** Bypasses external subscription keys and rate limits by shifting to unauthenticated backup endpoints using active IP proxy rotation.
 *   **Automatic UK Normalisation:** Detects London Stock Exchange (LSE) penny structures (`GBX`/`GBp`) and auto-scales them to standard Pounds (`GBP`).
 *   **Cross-Border FX Layer:** Pass any currency flag (`--base EUR`) to calculate and normalize foreign equities into your home currency profile.
+*   **Pipeline Ready:** Output raw program state as JSON for seamless integration with other CLI tools.
 
 ---
 
-##  Native Debian/Ubuntu Installation
+## Installation
 
-To compile and build `hwfinance` as an integrated, native GNU/Linux package, execute the following commands in your shell:
+Install globally using `npm`:
 
-
+```bash
+npm install -g hwfinance
 ```
 
 ---
 
-## Command Matrix & Operational Syntax
+##  Command Matrix & Operational Syntax
 
 ### Execution Pattern
 ```bash
 hwfinance <ticker> [flags]
 ```
 
-### Flag Parameters
-
+### Parameters
 
 | Flag | Accepted Fields | Functional Output |
 | :--- | :--- | :--- |
 | `--pull` | `all`, `stock-price`, `market-cap`, `dividend-yield`, `total-debt` | Returns immediate, live fundamental asset sheets. |
-| `--calc` | `all`, `fcf`, `ev`, `fcf-yield`, `dcf` | Computes complex, forward-looking valuation equations. |
+| `--calc` | `all`, `fcf`, `ev`, `fcf-yield`, `multiples`, `dcf` | Computes complex, forward-looking valuation equations. |
 | `--chart` | Period (e.g., `1d`, `1mo`, `1y`) | Renders a window-based line chart. |
 | `--candle` | Period (e.g., `1d`, `1mo`, `1y`) | Renders a window-based candlestick chart. |
 | `--interval` | `1m`, `5m`, `1h`, `1d`, etc. | Sets the data granularity for charts. |
 | `--order` | `buy`, `sell` | Initiates a stock order via Alpaca. |
 | `--qty` | Number | Specifies share quantity for an order. |
+| `--type` | `market`, `limit` | Sets order type (Default: `market`). |
+| `--price` | Number | Sets limit price for limit orders. |
 | `--config` | `set`, `get`, `delete` | Manages local API keys and settings. |
-| `--base` | Any valid ISO string (`USD`, `EUR`, `GBP`, `JPY`, etc.) | Triggers active FX conversion of all output parameters. |
-| `--help` | None | Overrides parser errors and displays the interactive script manual. |
+| `--base` | ISO Code (`USD`, `EUR`, `GBP`, etc.) | Triggers active FX conversion of all output parameters. |
+| `--json` | None | Outputs raw data as JSON for automation. |
+| `--help` | None | Displays the interactive script manual. |
 
 ### Global Ticker Notation Rules
 
-To target different international indices, append your exchange string tokens using the following syntax structure:
-
-*   **US Equities (NASDAQ / NYSE):** Clear input symbol directly \rightarrow `AAPL`, `TSLA`, `NVDA`
-*   **London Stock Exchange (LSE):** Append `.L` \rightarrow `BP.L`, `LLOY.L`, `VOD.L`
-*   **Tokyo Stock Exchange (TSE):** Append `.T` \rightarrow `7203.T`, `9984.T`
-*   **Frankfurt Stock Exchange (DAX):** Append `.DE` \rightarrow `SAP.DE`, `BMW.DE`
-*   **Toronto Stock Exchange (TSX):** Append `.TO` \rightarrow `SHOP.TO`
+| Market | Suffix | Example |
+| :--- | :--- | :--- |
+| **US (NASDAQ/NYSE)** | None | `AAPL`, `TSLA`, `NVDA` |
+| **London (LSE)** | `.L` | `BP.L`, `LLOY.L`, `VOD.L` |
+| **Tokyo (TSE)** | `.T` | `7203.T`, `9984.T` |
+| **Frankfurt (DAX)** | `.DE` | `SAP.DE`, `BMW.DE` |
+| **Toronto (TSX)** | `.TO` | `SHOP.TO` |
 
 ---
 
-## 🛠️ Configuration (Trading Setup)
+## ⚙️ Configuration (Trading Setup)
 
-To use the trading features, you must configure your Alpaca API keys:
+To enable trading features, configure your Alpaca API credentials:
 
 ```bash
 hwfinance --config set alpaca_key <YOUR_ALPACA_KEY>
@@ -103,44 +84,43 @@ hwfinance --config set alpaca_base_url https://api.alpaca.markets
 
 ##  Terminal Action Examples
 
-**Charting & Visualization:**
-Render a 1-month line chart for NVIDIA:
+**Visualisation:**
 ```bash
+# Render a 1-month line chart for NVIDIA
 hwfinance NVDA --chart 1mo
-```
 
-Render a 5-minute interval candlestick chart for Tesla for the last day:
-```bash
+# Render 5-minute interval candles for Tesla
 hwfinance TSLA --candle 1d --interval 5m
 ```
 
 **Financial Analysis:**
-Pull a complete raw profile matrix for **Apple** in native US Dollars:
 ```bash
+# Pull complete fundamental profile for Apple
 hwfinance AAPL --pull all
-```
 
-Evaluate advanced Enterprise Value and 5-Year DCF growth profiles for **Barclays Bank** in British Pounds:
-```bash
+# Evaluate Enterprise Value and DCF for Barclays (LSE)
 hwfinance BARC.L --calc all
-```
 
-Query **Toyota's** stock price from the Tokyo Stock Exchange and automatically convert the metric to Euros (€):
-```bash
+# Query Toyota (TSE) with automatic conversion to Euros
 hwfinance 7203.T --pull stock-price --base EUR
 ```
 
 **Executing Orders:**
-Buy 10 shares of Apple at market price:
 ```bash
+# Buy 10 shares of Apple at market price
 hwfinance AAPL --order buy --qty 10
+
+# Sell 5 shares of Microsoft with a limit price of $400
+hwfinance MSFT --order sell --qty 5 --type limit --price 400
 ```
 
-Sell 5 shares of Microsoft with a limit price of $400:
+**Advanced Pipeline Integration:**
 ```bash
-hwfinance MSFT --order sell --qty 5 --type limit --price 400
+# Pipe JSON output to jq for custom parsing
+hwfinance MSFT --pull all --json | jq '.price'
 ```
 
 ---
 
-# hwtrading
+##  License
+Distributed under the MIT License. See `LICENSE` for more information.
