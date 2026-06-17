@@ -123,4 +123,4 @@ hwfinance MSFT --pull all --json | jq '.price'
 ---
 
 ##  License
-Distributed under the MIT License. See `LICENSE` for more information.
+idgaf what you do with this, i use gpl license 2 or 3, contact me at cat.hector8@gmail for any demands
