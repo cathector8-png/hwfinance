@@ -1,0 +1,28 @@
+# --- 1. Python & Programming Junk ---
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+.env
+
+# --- 2. Financial Data (The "Noise") ---
+*.csv
+*.json
+*.log
+*.sqlite3
+*.xlsx
+
+# --- 3. Security & Hacking (The "Stealth") ---
+*.pcap
+*.cap
+*.nmap
+*.gnmap
+credentials.json
+secrets.py
+
+# --- 4. System Junk ---
+.DS_Store
+Thumbs.db
+.directory
+*~

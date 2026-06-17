@@ -1,0 +1,53 @@
+name: Build and Host Debian Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y debhelper devscripts build-essential python3-all dh-python
+
+      - name: Build Package
+        run: dpkg-buildpackage -us -uc -b
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "../*.deb"
+
+      - name: Deploy to APT Repo
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          
+          # Switch to gh-pages or create it if missing
+          git fetch origin
+          git checkout gh-pages || git checkout -b gh-pages
+          
+          # Organize the repo folder
+          mkdir -p repo
+          cp ../*.deb repo/
+          cd repo
+          
+          # Generate APT indices
+          apt-ftparchive packages . > Packages
+          gzip -k -f Packages
+          
+          # Push back to GitHub
+          cd ..
+          git add repo/
+          git commit -m "Update APT repository for ${GITHUB_REF_NAME}"
+          git push origin gh-pages --force

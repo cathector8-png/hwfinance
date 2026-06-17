@@ -1,0 +1,36 @@
+{
+  "name": "hwfinance",
+  "version": "1.4.1",
+  "description": "High-density CLI financial analysis engine with professional charting and integrated Alpaca trading.",
+  "main": "bin/index.js",
+  "bin": {
+    "hwfinance": "bin/index.js"
+  },
+  "files": [
+    "bin/index.js",
+    "hwfinance",
+    "Requirements",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "finance",
+    "trading",
+    "charts",
+    "cli",
+    "alpaca",
+    "yfinance",
+    "stock-market"
+  ],
+  "author": "Hector Wakim",
+  "license": "GPL-3.0-or-later",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "hwfinance": "^1.4.0"
+  }
+}
