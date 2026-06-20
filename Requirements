@@ -4,6 +4,7 @@ argparse
 pandas
 mplfinance
 alpaca-trade-api
+cryptography
 
 Terminal
 GNU Linux terminal with apt

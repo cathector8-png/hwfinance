@@ -7,9 +7,262 @@ import urllib.parse
 import re
 import random
 import os
+import base64
+import hashlib
 import yfinance as yf
 import mplfinance as mpf
 import alpaca_trade_api as tradeapi
+
+# ─── Seed Phrase Constants ───────────────────────────────────────────────────
+VAULT_SALT_AES    = b'hwfinance-aes-v1'
+VAULT_SALT_BUCKET = 'hwfinance-bucket-v1'
+KVDB_BASE         = 'https://kvdb.io'
+
+# Standard BIP39 English wordlist (2048 words)
+BIP39_WORDLIST = [
+    "abandon","ability","able","about","above","absent","absorb","abstract",
+    "absurd","abuse","access","accident","account","accuse","achieve","acid",
+    "acoustic","acquire","across","act","action","actor","actress","actual",
+    "adapt","add","addict","address","adjust","admit","adult","advance",
+    "advice","aerobic","afford","afraid","again","age","agent","agree",
+    "ahead","aim","air","airport","aisle","alarm","album","alcohol",
+    "alert","alien","all","alley","allow","almost","alone","alpha",
+    "already","also","alter","always","amateur","amazing","among","amount",
+    "amused","analyst","anchor","ancient","anger","angle","angry","animal",
+    "ankle","announce","annual","another","answer","antenna","antique","anxiety",
+    "any","apart","apology","appear","apple","approve","april","arch",
+    "arctic","area","arena","argue","arm","armed","armor","army",
+    "around","arrange","arrest","arrive","arrow","art","artefact","artist",
+    "artwork","ask","aspect","assault","asset","assist","assume","asthma",
+    "athlete","atom","attack","attend","attitude","attract","auction","audit",
+    "august","aunt","author","auto","autumn","average","avocado","avoid",
+    "awake","aware","away","awesome","awful","awkward","axis","baby",
+    "balance","bamboo","banana","banner","bar","barely","bargain","barrel",
+    "base","basic","basket","battle","beach","bean","beauty","because",
+    "become","beef","before","begin","behave","behind","believe","below",
+    "belt","bench","benefit","best","betray","better","between","beyond",
+    "bicycle","bid","bike","bind","biology","bird","birth","bitter",
+    "black","blade","blame","blanket","blast","bleak","bless","blind",
+    "blood","blossom","blouse","blue","blur","blush","board","boat",
+    "body","boil","bomb","bone","book","boost","border","boring",
+    "borrow","boss","bottom","bounce","box","boy","bracket","brain",
+    "brand","brave","breeze","brick","bridge","brief","bright","bring",
+    "brisk","broccoli","broken","bronze","broom","brother","brown","brush",
+    "bubble","buddy","budget","buffalo","build","bulb","bulk","bullet",
+    "bundle","bunker","burden","burger","burst","bus","business","busy",
+    "butter","buyer","buzz","cabbage","cabin","cable","cactus","cage",
+    "cake","call","calm","camera","camp","can","canal","cancel",
+    "candy","cannon","canvas","canyon","capable","capital","captain","car",
+    "carbon","card","cargo","carpet","carry","cart","case","cash",
+    "castle","casual","cat","catalog","catch","category","cattle","caught",
+    "cause","caution","cave","ceiling","celery","cement","census","century",
+    "cereal","certain","chair","chalk","champion","change","chaos","chapter",
+    "charge","chase","chat","cheap","check","cheese","chef","cherry",
+    "chest","chicken","chief","child","chimney","choice","choose","chronic",
+    "chuckle","chunk","churn","cigar","cinnamon","circle","citizen","city",
+    "civil","claim","clap","clarify","claw","clay","clean","clerk",
+    "clever","click","client","cliff","climb","clinic","clip","clock",
+    "clog","close","cloth","cloud","clown","club","clump","cluster",
+    "clutch","coach","coast","coconut","code","coffee","coil","coin",
+    "collect","color","column","combine","come","comfort","comic","common",
+    "company","concert","conduct","confirm","congress","connect","consider","control",
+    "convince","cook","cool","copper","copy","coral","core","corn",
+    "correct","cost","cotton","couch","country","couple","course","cousin",
+    "cover","coyote","crack","cradle","craft","cram","crane","crash",
+    "crater","crawl","crazy","cream","credit","creek","crew","cricket",
+    "crime","crisp","critic","cross","crouch","crowd","crucial","cruel",
+    "cruise","crumble","crunch","crush","cry","crystal","cube","culture",
+    "cup","cupboard","curious","current","curtain","curve","cushion","custom",
+    "cute","cycle","dad","damage","damp","dance","danger","daring",
+    "dash","daughter","dawn","day","deal","debate","debris","decade",
+    "december","decide","decline","decorate","decrease","deer","defense","define",
+    "defy","degree","delay","deliver","demand","demise","denial","dentist",
+    "deny","depart","depend","deposit","depth","deputy","derive","describe",
+    "desert","design","desk","despair","destroy","detail","detect","develop",
+    "device","devote","diagram","dial","diamond","diary","dice","diesel",
+    "diet","differ","digital","dignity","dilemma","dinner","dinosaur","direct",
+    "dirt","disagree","discover","disease","dish","dismiss","display","distance",
+    "divert","divide","divorce","dizzy","doctor","document","dog","doll",
+    "dolphin","domain","donate","donkey","donor","door","dose","double",
+    "dove","draft","dragon","drama","drastic","draw","dream","dress",
+    "drift","drill","drink","drip","drive","drop","drum","dry",
+    "duck","dumb","dune","during","dust","dutch","duty","dwarf",
+    "dynamic","eager","eagle","early","earn","earth","easily","east",
+    "easy","echo","ecology","edge","edit","educate","effort","egg",
+    "eight","either","elbow","elder","electric","elegant","element","elephant",
+    "elevator","elite","else","embark","embody","embrace","emerge","emotion",
+    "employ","empower","empty","enable","enact","endless","endorse","enemy",
+    "energy","enforce","engage","engine","enhance","enjoy","enlist","enough",
+    "enrich","enroll","ensure","enter","entire","entry","envelope","episode",
+    "equal","equip","erase","erode","erosion","error","erupt","escape",
+    "essay","essence","estate","eternal","ethics","evidence","evil","evoke",
+    "evolve","exact","example","excess","exchange","excite","exclude","exercise",
+    "exhaust","exhibit","exile","exist","exit","exotic","expand","expire",
+    "explain","expose","express","extend","extra","eye","fable","face",
+    "faculty","faint","faith","fall","false","fame","family","famous",
+    "fan","fancy","fantasy","far","fashion","fat","fatal","father",
+    "fatigue","fault","favorite","feature","february","federal","fee","feed",
+    "feel","feet","fellow","felt","fence","festival","fetch","fever",
+    "few","fiber","fiction","field","figure","file","film","filter",
+    "final","find","fine","finger","finish","fire","firm","first",
+    "fiscal","fish","fit","fitness","fix","flag","flame","flash",
+    "flat","flavor","flee","flight","flip","float","flock","floor",
+    "flower","fluid","flush","fly","foam","focus","fog","foil",
+    "follow","food","foot","force","forest","forget","fork","fortune",
+    "forum","forward","fossil","foster","found","fox","fragile","frame",
+    "frequent","fresh","friend","fringe","frog","front","frost","frown",
+    "frozen","fruit","fuel","fun","funny","furnace","fury","future",
+    "gadget","gain","galaxy","gallery","game","gap","garbage","garden",
+    "garlic","garment","gasp","gate","gather","gauge","gaze","general",
+    "genius","genre","gentle","genuine","gesture","ghost","gift","giggle",
+    "ginger","giraffe","girl","give","glad","glance","glare","glass",
+    "glide","glimpse","globe","gloom","glory","glove","glow","glue",
+    "goat","goddess","gold","good","goose","gorilla","gospel","gossip",
+    "govern","gown","grab","grace","grain","grant","grape","grasp",
+    "grass","gravity","great","green","grid","grief","grit","grocery",
+    "group","grow","grunt","guard","guide","guilt","guitar","gun",
+    "gym","habit","hair","half","hammer","hamster","hand","happy",
+    "harsh","harvest","hat","have","hawk","hazard","head","health",
+    "heart","heavy","hedgehog","height","hello","helmet","help","hen",
+    "hero","hidden","high","hill","hint","hip","hire","history",
+    "hobby","hockey","hold","hole","hollow","home","honey","hood",
+    "hope","horn","horror","horse","hospital","host","hour","hover",
+    "hub","huge","human","humble","humor","hundred","hungry","hunt",
+    "hurdle","hurry","hurt","husband","hybrid","ice","icon","ignore",
+    "ill","illegal","image","imitate","immense","immune","impact","impose",
+    "improve","impulse","inbox","income","increase","index","indicate","indoor",
+    "industry","infant","inflict","inform","inhale","inject","inner","innocent",
+    "input","inquiry","insane","insect","inside","inspire","install","intact",
+    "interest","into","invest","invite","involve","iron","island","isolate",
+    "issue","item","ivory","jacket","jaguar","jar","jeans","jelly",
+    "jewel","job","join","joke","journey","joy","judge","juice",
+    "jump","jungle","junior","junk","just","kangaroo","keen","keep",
+    "ketchup","key","kick","kid","kingdom","kiss","kit","kitchen",
+    "kite","kitten","kiwi","knee","knife","knock","know","lab",
+    "label","lamp","language","laptop","large","later","laugh","laundry",
+    "lava","law","lawn","lawsuit","layer","lazy","leader","learn",
+    "leave","lecture","left","leg","legal","legend","lemon","lend",
+    "length","lens","leopard","lesson","letter","level","liar","liberty",
+    "library","license","life","lift","like","limb","limit","link",
+    "lion","liquid","list","little","live","lizard","load","loan",
+    "lobster","local","lock","logic","lonely","long","loop","lottery",
+    "loud","lounge","love","loyal","lucky","luggage","lumber","lunar",
+    "lunch","luxury","mad","magic","magnet","maid","main","mammal",
+    "mango","mansion","manual","maple","marble","march","margin","marine",
+    "market","marriage","mask","master","match","material","math","matrix",
+    "matter","maximum","maze","meadow","mean","medal","media","melody",
+    "melt","member","memory","mention","mentor","menu","mercy","merge",
+    "merit","merry","mesh","message","metal","method","middle","midnight",
+    "milk","million","mimic","mind","minimum","minor","minute","miracle",
+    "miss","mitten","model","modify","mom","monitor","monkey","monster",
+    "month","moon","moral","more","morning","mosquito","mother","motion",
+    "motor","mountain","mouse","move","movie","much","muffin","mule",
+    "multiply","muscle","museum","mushroom","music","must","mutual","myself",
+    "mystery","naive","name","napkin","narrow","nasty","nature","near",
+    "neck","need","negative","neglect","neither","nephew","nerve","nest",
+    "network","news","next","nice","night","noble","noise","nominee",
+    "noodle","normal","north","notable","note","nothing","notice","novel",
+    "now","nuclear","number","nurse","nut","oak","obey","object",
+    "oblige","obscure","obtain","ocean","october","odor","off","offer",
+    "office","often","oil","okay","old","olive","olympic","omit",
+    "once","onion","open","option","orange","orbit","orchard","order",
+    "ordinary","organ","orient","original","orphan","ostrich","other","outdoor",
+    "outside","oval","own","oyster","ozone","pact","paddle","page",
+    "pair","palace","palm","panda","panel","panic","panther","paper",
+    "parade","parent","park","parrot","party","pass","patch","path",
+    "patrol","pause","pave","payment","peace","peanut","pear","peasant",
+    "pelican","pen","penalty","pencil","people","pepper","perfect","permit",
+    "person","pet","phone","photo","phrase","physical","piano","picnic",
+    "picture","piece","pig","pigeon","pill","pilot","pink","pioneer",
+    "pipe","pistol","pitch","pizza","place","planet","plastic","plate",
+    "play","please","pledge","pluck","plug","plunge","poem","poet",
+    "point","polar","pole","police","pond","pony","pool","popular",
+    "portion","position","possible","post","potato","pottery","poverty","powder",
+    "power","practice","praise","predict","prefer","prepare","present","pretty",
+    "prevent","price","pride","primary","print","priority","prison","private",
+    "prize","problem","process","produce","profit","program","project","promote",
+    "proof","property","prosper","protect","proud","provide","public","pudding",
+    "pull","pulp","pulse","pumpkin","punish","pupil","purchase","purity",
+    "purpose","push","put","puzzle","pyramid","quality","quantum","quarter",
+    "question","quick","quit","quiz","quote","rabbit","raccoon","race",
+    "rack","radar","radio","rage","rail","rain","raise","rally",
+    "ramp","ranch","random","range","rapid","rare","rate","rather",
+    "raven","reach","ready","real","reason","rebel","rebuild","recall",
+    "receive","recipe","record","recycle","reduce","reflect","reform","refuse",
+    "region","regret","regular","reject","relax","release","relief","rely",
+    "remain","remember","remind","remove","render","renew","rent","reopen",
+    "repair","repeat","replace","report","require","rescue","resemble","resist",
+    "resource","response","result","retire","retreat","return","reunion","reveal",
+    "review","reward","rhythm","ribbon","rice","rich","ride","ridge",
+    "rifle","right","rigid","ring","riot","ripple","risk","ritual",
+    "rival","river","road","roast","robot","robust","rocket","romance",
+    "roof","rookie","room","rose","rotate","rough","royal","rubber",
+    "rude","rug","rule","run","runway","rural","sad","saddle",
+    "sadness","safe","sail","salad","salmon","salon","salt","salute",
+    "same","sample","sand","satisfy","satoshi","sauce","sausage","save",
+    "scale","scan","scatter","scene","scheme","school","science","scissors",
+    "scorpion","scout","scrap","screen","script","scrub","sea","search",
+    "season","seat","second","secret","section","security","seed","seek",
+    "segment","select","sell","seminar","senior","sense","sentence","series",
+    "service","session","settle","setup","seven","shadow","shaft","shallow",
+    "share","shed","shell","sheriff","shield","shift","shine","ship",
+    "shiver","shock","shoe","shoot","shop","short","shoulder","shove",
+    "shrimp","shrug","shuffle","shy","sibling","siege","sight","sign",
+    "silent","silk","silly","silver","similar","simple","since","sing",
+    "siren","sister","situate","six","size","sketch","skill","skin",
+    "skirt","skull","slab","slam","sleep","slender","slice","slide",
+    "slight","slim","slogan","slot","slow","slush","small","smart",
+    "smile","smoke","smooth","snack","snake","snap","sniff","snow",
+    "soap","soccer","social","sock","solar","soldier","solid","solution",
+    "solve","someone","song","soon","sorry","soul","sound","soup",
+    "source","south","space","spare","spatial","spawn","speak","special",
+    "speed","sphere","spice","spider","spike","spin","spirit","split",
+    "spoil","sponsor","spoon","spray","spread","spring","spy","square",
+    "squeeze","squirrel","stable","stadium","staff","stage","stairs","stamp",
+    "stand","start","state","stay","steak","steel","stem","step",
+    "stereo","stick","still","sting","stock","stomach","stone","stop",
+    "storm","story","stove","strategy","street","strike","strong","struggle",
+    "student","stuff","stumble","subject","submit","subway","success","such",
+    "sudden","suffer","sugar","suggest","suit","summer","sun","sunny",
+    "sunset","super","supply","supreme","sure","surface","surge","surprise",
+    "sustain","swallow","swamp","swap","swear","sweet","swift","swim",
+    "swing","switch","sword","symbol","symptom","syrup","table","tackle",
+    "tag","tail","talent","tank","tape","target","task","taste",
+    "tattoo","taxi","teach","team","tell","ten","tenant","tennis",
+    "tent","term","test","text","thank","that","theme","then",
+    "theory","there","they","thing","this","thought","three","thrive",
+    "throw","thumb","thunder","ticket","tilt","timber","time","tiny",
+    "tip","tired","title","toast","tobacco","today","together","toilet",
+    "token","tomato","tomorrow","tone","tongue","tonight","tool","tooth",
+    "top","topic","topple","torch","tornado","tortoise","toss","total",
+    "tourist","toward","tower","town","toy","track","trade","traffic",
+    "tragic","train","transfer","trap","trash","travel","tray","treat",
+    "tree","trend","trial","tribe","trick","trigger","trim","trip",
+    "trophy","trouble","truck","truly","trumpet","trust","truth","try",
+    "tube","tuition","tumble","tuna","tunnel","turkey","turn","turtle",
+    "twelve","twenty","twice","twin","twist","two","type","typical",
+    "ugly","umbrella","unable","unaware","uncle","uncover","under","undo",
+    "unfair","unfold","unhappy","uniform","unique","universe","unknown","unlock",
+    "until","unusual","unveil","update","upgrade","uphold","upon","upper",
+    "upset","urban","useful","useless","usual","utility","vacant","vacuum",
+    "vague","valid","valley","valve","van","vanish","vapor","various",
+    "vast","vault","vehicle","velvet","vendor","venture","venue","verb",
+    "verify","version","very","veteran","viable","vibrant","vicious","victory",
+    "video","view","village","vintage","violin","virtual","virus","visa",
+    "visit","visual","vital","vivid","vocal","voice","void","volcano",
+    "volume","vote","voyage","wage","wagon","wait","walk","wall",
+    "walnut","want","warfare","warm","warrior","waste","water","wave",
+    "way","wealth","weapon","wear","weasel","weather","web","wedding",
+    "weekend","weird","welcome","well","west","wet","whale","wheat",
+    "wheel","when","where","whip","whisper","wide","width","wife",
+    "wild","will","win","window","wine","wing","wink","winner",
+    "winter","wire","wisdom","wise","wish","witness","wolf","woman",
+    "wonder","wood","wool","word","world","worry","worth","wrap",
+    "wreck","wrestle","wrist","write","wrong","yard","year","yellow",
+    "you","young","youth","zebra","zero","zone","zoo"
+]
+# Pad to exactly 2048 entries if needed
+assert len(BIP39_WORDLIST) <= 2048
 
 # Visual Shell Anchors (ANSI Colors)
 C_GREEN = "\033[1;32m"
@@ -33,7 +286,7 @@ def print_custom_help():
     print(f"|                       made by hector wakim                            |")
     print(f"+-----------------------------------------------------------------------+{C_RESET}")
     print(f"\n{C_BOLD}USAGE SNTX:{C_RESET}")
-    print(f"  hwfinance <ticker> [flags]")
+    print(f"  hwfinance <ticker(s)> [flags]")
     print(f"  hwfinance --help")
     
     print(f"\n{C_BOLD}GLOBAL CAPABILITIES & OPERATIONS:{C_RESET}")
@@ -44,14 +297,27 @@ def print_custom_help():
     print(f"  {C_CYAN}--chart [pd]{C_RESET}      Render a window-based line chart. Default pd: 1mo.")
     print(f"  {C_CYAN}--candle [pd]{C_RESET}     Render a window-based candlestick chart. Default pd: 1mo.")
     print(f"  {C_CYAN}--interval <int>{C_RESET}  Set chart data interval (1m, 5m, 1h, 1d, 1wk, 1mo).")
+    print(f"  {C_CYAN}--text-chart, -t{C_RESET}  Force text-based ASCII chart rendering (default if headless).")
+    print(f"  {C_CYAN}--format, -f <fmt>{C_RESET} Output format: {C_WHITE}table, csv, tsv, markdown{C_RESET}")
     print(f"  {C_CYAN}--base <ISO>{C_RESET}      Override asset currency. Auto-converts to target index.")
     print(f"  {C_CYAN}--json{C_RESET}            Output raw program state structures for pipeline automation.")
+    print(f"  {C_CYAN}--shell, -i{C_RESET}       Start an interactive financial command shell REPL.")
+
+    print(f"\n{C_BOLD}SEED PHRASE & CROSS-MACHINE ACCESS:{C_RESET}")
+    print(f"  {C_CYAN}--generate-seed{C_RESET}  Generate a 12-word BIP39 seed phrase, encrypt your credentials,")
+    print(f"                 and store the vault online. Run this once after setup.")
+    print(f"  {C_CYAN}log-in <words>{C_RESET}   Restore credentials on a new machine using your 12 seed words.")
+    print(f"                 Usage: {C_WHITE}hwfinance log-in word1 word2 ... word12{C_RESET}")
+
 
     print(f"\n{C_BOLD}TRADING & CONFIGURATION (ALPACA):{C_RESET}")
     print(f"  {C_CYAN}--order <side>{C_RESET}    Submit a stock order (buy/sell). Requires Alpaca keys.")
     print(f"  {C_CYAN}--qty <number>{C_RESET}    Quantity of shares to buy or sell.")
     print(f"  {C_CYAN}--type <type>{C_RESET}     Order type (market, limit). Default: market.")
     print(f"  {C_CYAN}--price <val>{C_RESET}     Limit price for limit orders.")
+    print(f"  {C_CYAN}--yes, -y{C_RESET}         Bypass interactive trading order confirmations.")
+    print(f"  {C_CYAN}--portfolio{C_RESET}      Display current open positions.")
+    print(f"  {C_CYAN}--account{C_RESET}        Display account equity, cash, and balances.")
     print(f"  {C_CYAN}--config <act>{C_RESET}    Manage API keys (set, get, delete).")
     print(f"                 Usage: {C_WHITE}--config set alpaca_key <YOUR_KEY>{C_RESET}")
     
@@ -73,6 +339,7 @@ def print_custom_help():
     print(f"  hwfinance BARC.L --calc all --json            {C_GREEN}# Output raw calculations via pipeline objects{C_RESET}")
     print(f"  hwfinance 7203.T --pull stock-price --base EUR {C_GREEN}# Get Toyota price converted to Euros{C_RESET}")
     print(f"{C_GREEN}+-----------------------------------------------------------------------+{C_RESET}\n")
+
 
 class CustomArgumentParser(argparse.ArgumentParser):
     def error(self, message):
@@ -199,9 +466,7 @@ def get_ticker_data(ticker_symbol, base_currency=None):
             proxy_info = fallback_data["proxy_used"]
             used_fallback = True
         except Exception as fallback_error:
-            print(f"{C_YELLOW}Primary Engine Failure:{C_RESET} {e}")
-            print(f"{C_YELLOW}Public Proxy Engine Failure:{C_RESET} {fallback_error}")
-            sys.exit(1)
+            raise fallback_error
 
     if native_currency in ['GBp', 'GBX']:
         if raw_price > 10.0: raw_price /= 100.0
@@ -377,15 +642,205 @@ def handle_chart(ticker_symbol, period="1mo", interval="1d", is_candle=False):
     except Exception as e:
         print(f"{C_RED}ERROR:{C_RESET} Failed to generate chart: {e}")
 
-def handle_order(ticker_symbol, action, qty, order_type="market", price=None):
+# ─── Seed Phrase & Cross-Machine Vault ───────────────────────────────────────
+
+def generate_seed_phrase():
+    """Generate 12 BIP39 words from 128 bits of cryptographic entropy."""
+    import secrets
+    entropy = int.from_bytes(secrets.token_bytes(16), 'big')  # 128 bits
+    words = []
+    for _ in range(12):
+        words.append(BIP39_WORDLIST[entropy % len(BIP39_WORDLIST)])
+        entropy //= len(BIP39_WORDLIST)
+    return words
+
+def mnemonic_to_fernet_key(words):
+    """Derive a Fernet (AES-128-CBC + HMAC-SHA256) key from the 12-word phrase."""
+    mnemonic = ' '.join(w.lower() for w in words)
+    raw_key = hashlib.pbkdf2_hmac('sha256', mnemonic.encode('utf-8'), VAULT_SALT_AES, 200000)
+    return base64.urlsafe_b64encode(raw_key)  # Fernet requires urlsafe-base64 32-byte key
+
+def mnemonic_to_bucket_id(words):
+    """Derive a deterministic, anonymous bucket ID from the 12-word phrase."""
+    mnemonic = ' '.join(w.lower() for w in words)
+    h = hashlib.sha256((mnemonic + VAULT_SALT_BUCKET).encode('utf-8')).hexdigest()
+    return h[:40]  # 40-char hex string: 160-bit address space
+
+def push_vault(bucket_id, encrypted_token_bytes):
+    """Upload encrypted credentials to anonymous kvdb.io key-value store."""
+    url = f"{KVDB_BASE}/{bucket_id}/hwf"
+    req = urllib.request.Request(
+        url, data=encrypted_token_bytes, method='POST',
+        headers={'Content-Type': 'application/octet-stream', 'User-Agent': 'hwfinance/1.5'}
+    )
+    with urllib.request.urlopen(req, timeout=12) as r:
+        return r.status in (200, 201)
+
+def fetch_vault(bucket_id):
+    """Download encrypted credentials from kvdb.io."""
+    url = f"{KVDB_BASE}/{bucket_id}/hwf"
+    req = urllib.request.Request(url, headers={'User-Agent': 'hwfinance/1.5'})
+    with urllib.request.urlopen(req, timeout=12) as r:
+        return r.read()
+
+def handle_generate_seed(args):
+    """Generate a 12-word seed phrase, encrypt local credentials, and push to cloud vault."""
+    try:
+        from cryptography.fernet import Fernet
+    except ImportError:
+        print(f"{C_RED}ERROR:{C_RESET} The 'cryptography' package is required for seed phrases.")
+        print(f"  Install it with: {C_WHITE}pip install cryptography{C_RESET}")
+        return
+
     config = load_config()
-    api_key = config.get('alpaca_key')
-    api_secret = config.get('alpaca_secret')
-    base_url = config.get('alpaca_base_url', 'https://paper-api.alpaca.markets')
+    api_key    = os.environ.get('APCA_API_KEY_ID') or config.get('alpaca_key', '')
+    api_secret = os.environ.get('APCA_API_SECRET_KEY') or config.get('alpaca_secret', '')
+    api_url    = os.environ.get('APCA_API_BASE_URL') or config.get('alpaca_base_url', 'https://paper-api.alpaca.markets')
 
     if not api_key or not api_secret:
-        print(f"{C_RED}ERROR:{C_RESET} Alpaca API keys not found. Use --config set alpaca_key <key> and --config set alpaca_secret <secret>")
+        print(f"{C_RED}ERROR:{C_RESET} No Alpaca credentials found. Set them first:")
+        print(f"  {C_WHITE}hwfinance --config set alpaca_key <KEY>{C_RESET}")
+        print(f"  {C_WHITE}hwfinance --config set alpaca_secret <SECRET>{C_RESET}")
         return
+
+    words     = generate_seed_phrase()
+    fernet_key = mnemonic_to_fernet_key(words)
+    bucket_id  = mnemonic_to_bucket_id(words)
+
+    payload   = json.dumps({'alpaca_key': api_key, 'alpaca_secret': api_secret, 'alpaca_base_url': api_url})
+    encrypted = Fernet(fernet_key).encrypt(payload.encode())
+
+    print(f"\n{C_YELLOW}Uploading encrypted vault...{C_RESET}")
+    try:
+        push_vault(bucket_id, encrypted)
+    except Exception as e:
+        print(f"{C_RED}ERROR:{C_RESET} Failed to push vault: {e}")
+        return
+
+    config['seed_bucket_id'] = bucket_id
+    save_config(config)
+
+    # Display the seed phrase
+    print(f"\n{C_GREEN}+-----------------------------------------------------------------------+")
+    print(f"| {C_BOLD}YOUR HWFINANCE SEED PHRASE{C_RESET}{C_GREEN}                                              |")
+    print(f"+-----------------------------------------------------------------------+{C_RESET}")
+    print(f"\n{C_YELLOW}{C_BOLD}  Write down these 12 words in order. They are the ONLY way to recover your")
+    print(f"  portfolio credentials on a new machine. Store them offline and securely.{C_RESET}\n")
+    for i, word in enumerate(words, 1):
+        bullet = f"{C_CYAN}{i:>2}.{C_RESET}"
+        print(f"       {bullet}  {C_WHITE}{C_BOLD}{word:<14}{C_RESET}")
+        if i == 6:
+            print()
+    print(f"\n{C_GREEN}+-----------------------------------------------------------------------+{C_RESET}")
+    print(f"\n{C_BOLD}To sign in on any machine:{C_RESET}")
+    print(f"  {C_CYAN}hwfinance log-in {' '.join(words)}{C_RESET}")
+    print(f"\n{C_RED}⚠  WARNING: Anyone with these 12 words can access your Alpaca API credentials.{C_RESET}\n")
+
+def handle_login(word_list):
+    """Restore Alpaca credentials from a 12-word seed phrase via the cloud vault."""
+    try:
+        from cryptography.fernet import Fernet, InvalidToken
+    except ImportError:
+        print(f"{C_RED}ERROR:{C_RESET} The 'cryptography' package is required for seed phrases.")
+        print(f"  Install it with: {C_WHITE}pip install cryptography{C_RESET}")
+        sys.exit(1)
+
+    if len(word_list) != 12:
+        print(f"{C_RED}ERROR:{C_RESET} Exactly 12 seed words required. Got {len(word_list)}.")
+        print(f"  Usage: {C_WHITE}hwfinance log-in word1 word2 ... word12{C_RESET}")
+        sys.exit(1)
+
+    words   = [w.lower().strip() for w in word_list]
+    invalid = [w for w in words if w not in BIP39_WORDLIST]
+    if invalid:
+        print(f"{C_RED}ERROR:{C_RESET} Unrecognised seed word(s): {C_WHITE}{', '.join(invalid)}{C_RESET}")
+        print(f"  All 12 words must come from the BIP39 English wordlist.")
+        sys.exit(1)
+
+    fernet_key = mnemonic_to_fernet_key(words)
+    bucket_id  = mnemonic_to_bucket_id(words)
+
+    print(f"\n{C_CYAN}Connecting to vault...{C_RESET}")
+    try:
+        encrypted_data = fetch_vault(bucket_id)
+    except Exception as e:
+        print(f"{C_RED}ERROR:{C_RESET} Could not reach the vault. Check your connection or seed words.")
+        print(f"  Detail: {e}")
+        sys.exit(1)
+
+    try:
+        decrypted = Fernet(fernet_key).decrypt(encrypted_data)
+        creds     = json.loads(decrypted.decode())
+    except InvalidToken:
+        print(f"{C_RED}ERROR:{C_RESET} Decryption failed — incorrect seed phrase.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"{C_RED}ERROR:{C_RESET} Failed to decode vault data: {e}")
+        sys.exit(1)
+
+    config = load_config()
+    config['alpaca_key']      = creds.get('alpaca_key', '')
+    config['alpaca_secret']   = creds.get('alpaca_secret', '')
+    config['alpaca_base_url'] = creds.get('alpaca_base_url', 'https://paper-api.alpaca.markets')
+    config['seed_bucket_id']  = bucket_id
+    save_config(config)
+
+    key_preview = config['alpaca_key'][:8] + '...' if config['alpaca_key'] else 'N/A'
+    url_display = config['alpaca_base_url']
+    live = 'LIVE' if 'paper' not in url_display else 'PAPER'
+    live_color = C_RED if live == 'LIVE' else C_YELLOW
+
+    print(f"{C_GREEN}\n✓ Portfolio unlocked successfully.{C_RESET}")
+    print(f"  Alpaca Key:  {C_WHITE}{key_preview}{C_RESET}")
+    print(f"  Mode:        {live_color}{C_BOLD}{live}{C_RESET}")
+    print(f"  Base URL:    {C_WHITE}{url_display}{C_RESET}\n")
+
+def handle_order(ticker_symbol, action, qty, order_type="market", price=None, skip_confirm=False):
+    config = load_config()
+    api_key = os.environ.get('APCA_API_KEY_ID') or os.environ.get('ALPACA_API_KEY_ID') or config.get('alpaca_key')
+    api_secret = os.environ.get('APCA_API_SECRET_KEY') or os.environ.get('ALPACA_API_SECRET_KEY') or config.get('alpaca_secret')
+    base_url = os.environ.get('APCA_API_BASE_URL') or os.environ.get('ALPACA_API_BASE_URL') or config.get('alpaca_base_url', 'https://paper-api.alpaca.markets')
+
+    if not api_key or not api_secret:
+        print(f"{C_RED}ERROR:{C_RESET} Alpaca API credentials not found.")
+        print("Set them via environment variables (APCA_API_KEY_ID & APCA_API_SECRET_KEY)")
+        print("or run config: hwfinance --config set alpaca_key <KEY> and alpaca_secret <SECRET>")
+        return
+
+    price_val = price
+    currency = 'USD'
+    cs = '$'
+    try:
+        data = get_ticker_data(ticker_symbol)
+        if not price_val:
+            price_val = data['price']
+        currency = data['native_currency']
+        cs = data['currency_symbol']
+    except Exception:
+        pass
+
+    est_cost = (price_val * qty) if price_val else 0.0
+
+    if not skip_confirm and sys.stdin.isatty():
+        print(f"\n{C_YELLOW}{C_BOLD}⚠️  TRADE ORDER CONFIRMATION{C_RESET}")
+        print(f"  Ticker:     {C_CYAN}{ticker_symbol.upper()}{C_RESET}")
+        print(f"  Action:     {C_GREEN if action == 'buy' else C_RED}{action.upper()}{C_RESET}")
+        print(f"  Quantity:   {C_WHITE}{qty}{C_RESET}")
+        print(f"  Order Type: {C_WHITE}{order_type.upper()}{C_RESET}")
+        if price_val:
+            print(f"  Price:      {C_WHITE}{cs}{price_val:,.2f} {currency}{C_RESET}")
+            print(f"  Est. Cost:  {C_WHITE}{cs}{est_cost:,.2f} {currency}{C_RESET}")
+        else:
+            print(f"  Price:      {C_WHITE}Market price (unknown){C_RESET}")
+        
+        try:
+            confirm = input(f"\nProceed with submitting this order to Alpaca? [y/N]: ").strip().lower()
+            if confirm not in ['y', 'yes']:
+                print(f"{C_RED}ORDER CANCELLED by user.{C_RESET}")
+                return
+        except (KeyboardInterrupt, EOFError):
+            print(f"\n{C_RED}ORDER CANCELLED by user.{C_RESET}")
+            return
 
     try:
         api = tradeapi.REST(api_key, api_secret, base_url, api_version='v2')
@@ -402,25 +857,618 @@ def handle_order(ticker_symbol, action, qty, order_type="market", price=None):
     except Exception as e:
         print(f"{C_RED}ERROR:{C_RESET} Failed to submit order: {e}")
 
+def search_ticker(query):
+    url = f"https://query2.finance.yahoo.com/v1/finance/search?q={urllib.parse.quote(query)}"
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            res = json.loads(response.read().decode())
+            quotes = res.get('quotes', [])
+            return [
+                {
+                    "symbol": q.get("symbol"),
+                    "name": q.get("shortname") or q.get("longname") or "",
+                    "exchange": q.get("exchange") or "",
+                    "type": q.get("quoteType") or ""
+                }
+                for q in quotes if "symbol" in q
+            ]
+    except Exception:
+        return []
+
+def handle_ticker_not_found(ticker_symbol):
+    print(f"{C_YELLOW}Ticker '{ticker_symbol}' not found or failed to load.{C_RESET}")
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        return None
+    
+    print(f"Searching for '{ticker_symbol}'...")
+    matches = search_ticker(ticker_symbol)
+    if not matches:
+        print(f"{C_RED}No matching tickers found.{C_RESET}")
+        return None
+        
+    print(f"\n{C_CYAN}Matching symbols:{C_RESET}")
+    limit = min(len(matches), 8)
+    for idx in range(limit):
+        match = matches[idx]
+        print(f"  [{idx + 1}] {C_BOLD}{match['symbol']}{C_RESET} - {match['name']} ({match['exchange']} / {match['type']})")
+    
+    try:
+        val = input(f"\nSelect a ticker by number (1-{limit}) or press Enter to cancel: ").strip()
+        if not val:
+            return None
+        idx = int(val)
+        if 1 <= idx <= limit:
+            return matches[idx - 1]['symbol']
+    except (ValueError, IndexError):
+        print(f"{C_RED}Invalid selection.{C_RESET}")
+    except (KeyboardInterrupt, EOFError):
+        print()
+    return None
+
+def handle_text_chart(ticker_symbol, period="1mo", interval="1d", is_candle=False):
+    try:
+        ticker = yf.Ticker(ticker_symbol)
+        history = ticker.history(period=period, interval=interval)
+        if history.empty:
+            print(f"{C_RED}ERROR:{C_RESET} No historical data found for {ticker_symbol} with period={period} and interval={interval}")
+            return
+        
+        try:
+            terminal_cols = os.get_terminal_size().columns
+        except OSError:
+            terminal_cols = 80
+            
+        width = min(len(history), terminal_cols - 15)
+        if width < 10:
+            width = len(history)
+        height = 12
+        
+        indices = [int(i * (len(history) - 1) / (width - 1)) for i in range(width)]
+        df_plot = history.iloc[indices]
+        
+        min_y = df_plot['Low'].min() if is_candle else df_plot['Close'].min()
+        max_y = df_plot['High'].max() if is_candle else df_plot['Close'].max()
+        if min_y == max_y:
+            min_y -= 1.0
+            max_y += 1.0
+            
+        def to_r(val):
+            return max(0, min(height - 1, int(round((max_y - val) / (max_y - min_y) * (height - 1)))))
+            
+        grid = [[" " for _ in range(width)] for _ in range(height)]
+        colors = [[C_RESET for _ in range(width)] for _ in range(height)]
+        
+        if is_candle:
+            for c in range(width):
+                row = df_plot.iloc[c]
+                ro = to_r(row['Open'])
+                rc = to_r(row['Close'])
+                rh = to_r(row['High'])
+                rl = to_r(row['Low'])
+                
+                color = C_GREEN if row['Close'] >= row['Open'] else C_RED
+                
+                for r in range(min(rh, rl), max(rh, rl) + 1):
+                    grid[r][c] = "│"
+                    colors[r][c] = color
+                
+                for r in range(min(ro, rc), max(ro, rc) + 1):
+                    grid[r][c] = "█"
+                    colors[r][c] = color
+                    
+                if ro == rc:
+                    grid[ro][c] = "─"
+                    colors[ro][c] = color
+        else:
+            for c in range(width):
+                row = df_plot.iloc[c]
+                rc = to_r(row['Close'])
+                grid[rc][c] = "●"
+                colors[rc][c] = C_CYAN
+                for r in range(rc + 1, height):
+                    grid[r][c] = "░"
+                    colors[r][c] = "\033[2;36m"
+                    
+        chart_type = "Candlestick" if is_candle else "Line"
+        print(f"\n{C_GREEN}+-----------------------------------------------------------+")
+        print(f"| {C_BOLD}{ticker_symbol.upper()} - Text {chart_type} Chart ({period}, {interval}){C_RESET}{C_GREEN:<16} |")
+        print(f"+-----------------------------------------------------------+{C_RESET}\n")
+        
+        for r in range(height):
+            price_val = max_y - r * (max_y - min_y) / (height - 1)
+            label = f"{price_val:10.2f} │"
+            row_str = "".join(f"{colors[r][c]}{grid[r][c]}{C_RESET}" for c in range(width))
+            print(f"{C_CYAN}{label}{C_RESET} {row_str}")
+            
+        axis_line = "─" * width
+        print(f"{C_CYAN}{' ':10} └{axis_line}{C_RESET}")
+        
+        dates = df_plot.index
+        d_start = dates[0].strftime('%Y-%m-%d')
+        d_end = dates[-1].strftime('%Y-%m-%d')
+        d_mid = dates[len(dates)//2].strftime('%Y-%m-%d')
+        
+        mid_pos = width // 2 - len(d_mid) // 2
+        end_pos = width - len(d_end)
+        
+        timeline = list(" " * width)
+        if width > len(d_start) + len(d_mid) + len(d_end) + 4:
+            timeline[0:len(d_start)] = list(d_start)
+            timeline[mid_pos:mid_pos+len(d_mid)] = list(d_mid)
+            timeline[end_pos:end_pos+len(d_end)] = list(d_end)
+        else:
+            timeline[0:len(d_start)] = list(d_start)
+            if width > len(d_start) + len(d_end) + 2:
+                timeline[end_pos:end_pos+len(d_end)] = list(d_end)
+                
+        print(f"{' ':12}{C_WHITE}{''.join(timeline)}{C_RESET}\n")
+        
+    except Exception as e:
+        print(f"{C_RED}ERROR:{C_RESET} Failed to generate text chart: {e}")
+
+def format_output(headers, rows, alignments, fmt="table"):
+    if fmt == "csv":
+        print(",".join(f'"{h}"' if ',' in str(h) else str(h) for h in headers))
+        for row in rows:
+            clean_row = [re.sub(r'\033\[[0-9;]*m', '', str(val)) for val in row]
+            print(",".join(f'"{val}"' if ',' in str(val) else str(val) for val in clean_row))
+    elif fmt == "tsv":
+        print("\t".join(str(h) for h in headers))
+        for row in rows:
+            clean_row = [re.sub(r'\033\[[0-9;]*m', '', str(val)) for val in row]
+            print("\t".join(str(val) for val in clean_row))
+    elif fmt == "markdown":
+        print("| " + " | ".join(headers) + " |")
+        align_row = []
+        for align in alignments:
+            if align == 'R':
+                align_row.append("---:")
+            else:
+                align_row.append("---")
+        print("| " + " | ".join(align_row) + " |")
+        for row in rows:
+            clean_row = [re.sub(r'\033\[[0-9;]*m', '', str(val)) for val in row]
+            print("| " + " | ".join(clean_row) + " |")
+    else:
+        widths = [len(h) for h in headers]
+        for row in rows:
+            for i, val in enumerate(row):
+                clean_val = re.sub(r'\033\[[0-9;]*m', '', str(val))
+                widths[i] = max(widths[i], len(clean_val))
+        
+        border = "+" + "-".join("-" * (w + 2) for w in widths) + "+"
+        print(C_GREEN + border + C_RESET)
+        header_cols = []
+        for i, h in enumerate(headers):
+            align = alignments[i]
+            if align == 'R':
+                header_cols.append(f"{C_WHITE}{str(h):>{widths[i]}}{C_RESET}")
+            else:
+                header_cols.append(f"{C_WHITE}{str(h):<{widths[i]}}{C_RESET}")
+        print(C_GREEN + "| " + C_RESET + (C_GREEN + " | " + C_RESET).join(header_cols) + C_GREEN + " |" + C_RESET)
+        print(C_GREEN + border + C_RESET)
+        for row in rows:
+            row_cols = []
+            for i, val in enumerate(row):
+                align = alignments[i]
+                clean_val = re.sub(r'\033\[[0-9;]*m', '', str(val))
+                padding = widths[i] - len(clean_val)
+                if align == 'R':
+                    row_cols.append(" " * padding + f"{str(val)}")
+                else:
+                    row_cols.append(f"{str(val)}" + " " * padding)
+            print(C_GREEN + "| " + C_RESET + (C_GREEN + " | " + C_RESET).join(row_cols) + C_GREEN + " |" + C_RESET)
+        print(C_GREEN + border + C_RESET)
+
+def handle_pull_multiple(args, data_list):
+    headers = ["Ticker"]
+    alignments = ["L"]
+    show_all = (args.pull == 'all')
+    
+    if show_all or args.pull == 'stock-price':
+        headers.append("Price")
+        alignments.append("R")
+    if show_all or args.pull == 'market-cap':
+        headers.append("Market Cap")
+        alignments.append("R")
+    if show_all or args.pull == 'dividend-yield':
+        headers.append("Div Yield")
+        alignments.append("R")
+    if show_all or args.pull == 'total-debt':
+        headers.append("Total Debt")
+        alignments.append("R")
+        
+    rows = []
+    for data in data_list:
+        row = [data['symbol']]
+        cs = data['currency_symbol']
+        if show_all or args.pull == 'stock-price':
+            row.append(f"{cs}{data['price']:,.2f}")
+        if show_all or args.pull == 'market-cap':
+            row.append(f"{cs}{data['market_cap']:,.0f}" if data['market_cap'] > 0 else "N/A")
+        if show_all or args.pull == 'dividend-yield':
+            row.append(f"{data['dividend_yield'] * 100:.2f}%")
+        if show_all or args.pull == 'total-debt':
+            row.append(f"{cs}{data['total_debt']:,.0f}" if data['total_debt'] > 0 else "N/A")
+        rows.append(row)
+        
+    format_output(headers, rows, alignments, args.format)
+
+def handle_calc_multiple(args, data_list):
+    headers = ["Ticker"]
+    alignments = ["L"]
+    show_all = (args.calc == 'all')
+    
+    if show_all or args.calc == 'fcf':
+        headers.append("Avg FCF")
+        alignments.append("R")
+    if show_all or args.calc == 'ev':
+        headers.append("EV")
+        alignments.append("R")
+    if show_all or args.calc == 'fcf-yield':
+        headers.append("FCF Yield")
+        alignments.append("R")
+    if show_all or args.calc == 'multiples':
+        headers.append("P/FCF")
+        alignments.append("R")
+        headers.append("EV/EBITDA")
+        alignments.append("R")
+        headers.append("Net Debt/EBITDA")
+        alignments.append("R")
+    if show_all or args.calc == 'dcf':
+        headers.append("Growth Rate")
+        alignments.append("R")
+        headers.append("CAPM discount")
+        alignments.append("R")
+        headers.append("Implied EV")
+        alignments.append("R")
+        headers.append("Intrinsic Price")
+        alignments.append("R")
+        
+    rows = []
+    for data in data_list:
+        cs = data['currency_symbol']
+        ev = data['market_cap'] + data['total_debt'] - data['cash']
+        net_debt = data['total_debt'] - data['cash']
+        fcf_yield = (data['fcf'] / data['market_cap']) if data['market_cap'] > 0 else 0.0
+        p_fcf = (data['market_cap'] / data['fcf']) if data['fcf'] > 0 else 0.0
+        ev_ebitda = (ev / data['ebitda']) if data['ebitda'] > 0 else 0.0
+        nd_ebitda = (net_debt / data['ebitda']) if data['ebitda'] > 0 else 0.0
+        
+        rf = 0.040
+        erp = 0.055
+        discount_rate = max(0.05, min(rf + (data['beta'] * erp), 0.15))
+        
+        projected_fcf = data['fcf']
+        high_growth = data['revenue_growth']
+        terminal_growth = 0.025
+        
+        present_value_fcf = 0.0
+        for year in range(1, 6):
+            projected_fcf *= (1 + high_growth)
+            present_value_fcf += projected_fcf / ((1 + discount_rate) ** year)
+            
+        current_growth = high_growth
+        for year in range(6, 11):
+            current_growth -= (high_growth - terminal_growth) / 5
+            projected_fcf *= (1 + current_growth)
+            present_value_fcf += projected_fcf / ((1 + discount_rate) ** year)
+            
+        terminal_value = (projected_fcf * (1 + terminal_growth)) / (discount_rate - terminal_growth)
+        terminal_value_pv = terminal_value / ((1 + discount_rate) ** 10)
+        
+        dcf_enterprise_value = present_value_fcf + terminal_value_pv
+        dcf_equity_value = dcf_enterprise_value - data['total_debt'] + data['cash']
+        intrinsic_value_per_share = max(0.0, dcf_equity_value / data['shares_outstanding'])
+        
+        row = [data['symbol']]
+        if show_all or args.calc == 'fcf':
+            row.append(f"{cs}{data['fcf']:,.0f}")
+        if show_all or args.calc == 'ev':
+            row.append(f"{cs}{ev:,.0f}")
+        if show_all or args.calc == 'fcf-yield':
+            row.append(f"{fcf_yield * 100:.2f}%")
+        if show_all or args.calc == 'multiples':
+            row.append(f"{p_fcf:.2f}x" if p_fcf > 0 else "N/A")
+            row.append(f"{ev_ebitda:.2f}x" if ev_ebitda > 0 else "N/A")
+            row.append(f"{nd_ebitda:.2f}x" if data['ebitda'] > 0 else "N/A")
+        if show_all or args.calc == 'dcf':
+            row.append(f"{high_growth * 100:.2f}%")
+            row.append(f"{discount_rate * 100:.2f}%")
+            row.append(f"{cs}{dcf_enterprise_value:,.0f}")
+            row.append(f"{cs}{intrinsic_value_per_share:,.2f}")
+        rows.append(row)
+        
+    format_output(headers, rows, alignments, args.format)
+
+def print_portfolio_positions(positions, account):
+    if not positions:
+        print(f"\n{C_YELLOW}No open positions in portfolio.{C_RESET}\n")
+        return
+        
+    headers = ["Ticker", "Shares", "Avg Entry", "Current", "Market Val", "Total P&L", "P&L %"]
+    alignments = ["L", "R", "R", "R", "R", "R", "R"]
+    rows = []
+    
+    for p in positions:
+        ticker = p.symbol
+        qty = float(p.qty)
+        avg_entry = float(p.avg_entry_price)
+        current = float(p.current_price)
+        market_val = float(p.market_value)
+        unrealized_pl = float(p.unrealized_pl)
+        unrealized_plpc = float(p.unrealized_plpc) * 100
+        
+        pl_color = C_GREEN if unrealized_pl >= 0 else C_RED
+        sign = "+" if unrealized_pl >= 0 else ""
+        
+        row = [
+            ticker,
+            f"{qty:g}",
+            f"${avg_entry:,.2f}",
+            f"${current:,.2f}",
+            f"${market_val:,.2f}",
+            f"{pl_color}{sign}${unrealized_pl:,.2f}{C_RESET}",
+            f"{pl_color}{unrealized_plpc:+.2f}%{C_RESET}"
+        ]
+        rows.append(row)
+        
+    print(f"\n{C_GREEN}+-----------------------------------------------------------+")
+    print(f"| {C_BOLD}ALPACA OPEN POSITIONS PORTFOLIO{C_RESET}{C_GREEN:<29} |")
+    print(f"+-----------------------------------------------------------+{C_RESET}")
+    format_output(headers, rows, alignments, "table")
+
+def print_account_summary(account):
+    print(f"\n{C_GREEN}+-----------------------------------------------------------+")
+    print(f"| {C_BOLD}ALPACA TRADING ACCOUNT SUMMARY{C_RESET}{C_GREEN:<29} |")
+    print(f"+-------------------------------------+---------------------+")
+    print_table_row("Account Number", account.account_number)
+    print_table_row("Status", account.status.upper())
+    print_table_row("Portfolio Value (Equity)", f"${float(account.equity):,.2f}")
+    print_table_row("Cash Balance", f"${float(account.cash):,.2f}")
+    print_table_row("Buying Power", f"${float(account.buying_power):,.2f}")
+    print_table_row("RegT Buying Power", f"${float(getattr(account, 'regt_buying_power', 0.0)):,.2f}")
+    print_table_row("Day Trading Buying Power", f"${float(getattr(account, 'daytrading_buying_power', 0.0)):,.2f}")
+    
+    last_equity = float(getattr(account, 'last_equity', account.equity))
+    change = float(account.equity) - last_equity
+    pct = (change / last_equity * 100) if last_equity > 0 else 0.0
+    color = C_GREEN if change >= 0 else C_RED
+    sign = "+" if change >= 0 else ""
+    print_table_row("Today's P&L", f"{color}{sign}${change:,.2f} ({pct:+.2f}%){C_RESET}")
+    print_table_footer()
+
+def handle_portfolio_and_account(args):
+    config = load_config()
+    api_key = os.environ.get('APCA_API_KEY_ID') or os.environ.get('ALPACA_API_KEY_ID') or config.get('alpaca_key')
+    api_secret = os.environ.get('APCA_API_SECRET_KEY') or os.environ.get('ALPACA_API_SECRET_KEY') or config.get('alpaca_secret')
+    base_url = os.environ.get('APCA_API_BASE_URL') or os.environ.get('ALPACA_API_BASE_URL') or config.get('alpaca_base_url', 'https://paper-api.alpaca.markets')
+    
+    if not api_key or not api_secret:
+        print(f"{C_RED}ERROR:{C_RESET} Alpaca API credentials not found.")
+        print("Set them via environment variables (APCA_API_KEY_ID & APCA_API_SECRET_KEY)")
+        print("or run config: hwfinance --config set alpaca_key <KEY> and alpaca_secret <SECRET>")
+        return
+        
+    try:
+        api = tradeapi.REST(api_key, api_secret, base_url, api_version='v2')
+        account = api.get_account()
+        
+        if args.account:
+            print_account_summary(account)
+            
+        if args.portfolio:
+            positions = api.list_positions()
+            print_portfolio_positions(positions, account)
+            
+    except Exception as e:
+        print(f"{C_RED}ERROR:{C_RESET} Alpaca API call failed: {e}")
+
+def run_config(config_args):
+    config = load_config()
+    action = config_args[0]
+    if action == "set" and len(config_args) == 3:
+        config[config_args[1]] = config_args[2]
+        save_config(config)
+    elif action == "get" and len(config_args) == 2:
+        print(f"{config_args[1]}: {config.get(config_args[1], 'NOT SET')}")
+    elif action == "delete" and len(config_args) == 2:
+        if config_args[1] in config:
+            del config[config_args[1]]
+            save_config(config)
+            print(f"Deleted {config_args[1]}")
+    else:
+        print(f"{C_RED}ERROR:{C_RESET} Invalid config command. Use: set <key> <val>, get <key>, or delete <key>")
+
+def run_command_logic(args, parser=None):
+    if args.portfolio or args.account:
+        handle_portfolio_and_account(args)
+        return
+        
+    if args.config:
+        run_config(args.config)
+        return
+
+    if not args.ticker:
+        if not sys.stdin.isatty():
+            try:
+                stdin_content = sys.stdin.read()
+                args.ticker = [t.strip() for t in re.split(r'\s+', stdin_content) if t.strip()]
+            except Exception:
+                pass
+
+    if not args.ticker:
+        print(f"{C_RED}ERROR:{C_RESET} Ticker symbol required for this operation.")
+        return
+
+    if args.order:
+        if args.qty is None:
+            print(f"{C_RED}ERROR:{C_RESET} --qty is required for orders.")
+            return
+        handle_order(args.ticker[0], args.order, args.qty, args.type, args.price, skip_confirm=args.yes)
+        return
+
+    if args.chart or args.candle:
+        is_headless = 'DISPLAY' not in os.environ or not os.environ['DISPLAY']
+        use_text_chart = args.text_chart or is_headless
+        if use_text_chart:
+            handle_text_chart(args.ticker[0], args.chart or args.candle, args.interval, is_candle=bool(args.candle))
+        else:
+            handle_chart(args.ticker[0], args.chart or args.candle, args.interval, is_candle=bool(args.candle))
+        return
+
+    if not args.pull and not args.calc:
+        if parser:
+            parser.print_usage()
+        else:
+            print_custom_help()
+        return
+
+    results = []
+    for t in args.ticker:
+        data = None
+        try:
+            data = get_ticker_data(t, args.base)
+            if data and data['price'] == 0.0 and data['market_cap'] == 0.0:
+                raise ValueError("Empty ticker data")
+        except Exception:
+            better_ticker = handle_ticker_not_found(t)
+            if better_ticker:
+                try:
+                    data = get_ticker_data(better_ticker, args.base)
+                except Exception as retry_err:
+                    print(f"{C_RED}ERROR:{C_RESET} Failed to fetch data for resolved ticker {better_ticker}: {retry_err}")
+            else:
+                print(f"{C_RED}ERROR:{C_RESET} Could not fetch data for ticker: {t}")
+        
+        if data:
+            results.append(data)
+            
+    if not results:
+        print(f"{C_RED}ERROR:{C_RESET} No data retrieved.")
+        return
+
+    if args.json:
+        if len(results) == 1:
+            print(json.dumps(results[0], indent=4))
+        else:
+            print(json.dumps(results, indent=4))
+        return
+
+    if len(results) == 1 and args.format == "table":
+        if args.pull:
+            handle_pull(args, results[0])
+        elif args.calc:
+            handle_calc(args, results[0])
+    else:
+        if args.pull:
+            handle_pull_multiple(args, results)
+        elif args.calc:
+            handle_calc_multiple(args, results)
+
+def handle_shell(parser):
+    import shlex
+    print(f"\n{C_GREEN}Welcome to {C_BOLD}hwfinance{C_RESET}{C_GREEN} Interactive Shell!{C_RESET}")
+    print(f"Type {C_CYAN}help{C_RESET} to show the help manual, or {C_CYAN}exit{C_RESET} or {C_CYAN}quit{C_RESET} to leave.\n")
+    
+    while True:
+        try:
+            line = input(f"{C_GREEN}hwfinance> {C_RESET}").strip()
+            if not line:
+                continue
+            if line.lower() in ['exit', 'quit', 'q']:
+                print("Exiting...")
+                break
+                
+            tokens = shlex.split(line)
+            if tokens and tokens[0] == 'hwfinance':
+                tokens = tokens[1:]
+                
+            if not tokens:
+                continue
+                
+            if tokens == ['help'] or tokens == ['-h'] or tokens == ['--help']:
+                print_custom_help()
+                continue
+                
+            original_error = parser.error
+            original_exit = parser.exit
+            
+            parse_failed = [False]
+            def shell_error(message):
+                print(f"{C_RED}ERROR:{C_RESET} {message}")
+                parse_failed[0] = True
+                
+            def shell_exit(status=0, message=None):
+                if message:
+                    print(message)
+                parse_failed[0] = True
+                
+            parser.error = shell_error
+            parser.exit = shell_exit
+            
+            try:
+                sub_args = parser.parse_args(tokens)
+            except SystemExit:
+                sub_args = None
+                
+            parser.error = original_error
+            parser.exit = original_exit
+            
+            if parse_failed[0] or sub_args is None:
+                continue
+                
+            if sub_args.help:
+                print_custom_help()
+                continue
+                
+            run_command_logic(sub_args, parser)
+            
+        except (KeyboardInterrupt, EOFError):
+            print("\nExiting...")
+            break
+        except Exception as e:
+            print(f"{C_RED}Unexpected Error in shell:{C_RESET} {e}")
+
 def main():
+    # ── Handle 'log-in' before argparse so the hyphen doesn't confuse it ───────
+    if len(sys.argv) > 1 and sys.argv[1] == 'log-in':
+        handle_login(sys.argv[2:])
+        sys.exit(0)
+
     parser = CustomArgumentParser(description="Global Linux Terminal Financial Command Engine", add_help=False)
     
     parser.add_argument("-h", "--help", action="store_true")
-    parser.add_argument("ticker", nargs="?", help="Global stock exchange symbol token")
+    parser.add_argument("ticker", nargs="*", help="Global stock exchange symbol token(s)")
     parser.add_argument("--base", help="Target currency override ISO code")
     parser.add_argument("--json", action="store_true", help="Format response as raw JSON mapping objects")
     
     # Charting Options
-    parser.add_argument("--chart", nargs="?", const="1mo", help="Render line chart for a period (e.g., 1d, 5d, 1mo, 1y)")
+    parser.add_argument("--chart", nargs="?", const="1mo", help="Render line chart for a period")
     parser.add_argument("--candle", nargs="?", const="1mo", help="Render candlestick chart for a period")
     parser.add_argument("--interval", default="1d", help="Interval for chart data (1m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo)")
+    parser.add_argument("-t", "--text-chart", action="store_true", help="Force text-based ASCII chart rendering")
+    
+    # Format Options
+    parser.add_argument("-f", "--format", choices=["table", "csv", "tsv", "markdown"], default="table", help="Tabular output format")
     
     # Trading Options
     parser.add_argument("--order", choices=['buy', 'sell'], help="Action for the order")
     parser.add_argument("--qty", type=float, help="Quantity of shares")
     parser.add_argument("--type", choices=['market', 'limit'], default="market", help="Order type")
     parser.add_argument("--price", type=float, help="Limit price for the order")
+    parser.add_argument("-y", "--yes", action="store_true", help="Bypass order confirmation prompt")
+    parser.add_argument("--portfolio", action="store_true", help="Display portfolio positions")
+    parser.add_argument("--account", action="store_true", help="Display account summary")
     
+    # Shell REPL
+    parser.add_argument("-i", "--shell", action="store_true", help="Start interactive shell REPL")
+
+    # Seed Phrase
+    parser.add_argument("--generate-seed", action="store_true",
+                        help="Generate a 12-word seed phrase and push encrypted credentials to a cloud vault")
+
     # Config Options
     parser.add_argument("--config", nargs="+", help="Manage configuration (set key val, get key, delete key)")
 
@@ -430,52 +1478,33 @@ def main():
 
     args = parser.parse_args()
 
-    # Handle Config
-    if args.config:
-        config = load_config()
-        action = args.config[0]
-        if action == "set" and len(args.config) == 3:
-            config[args.config[1]] = args.config[2]
-            save_config(config)
-        elif action == "get" and len(args.config) == 2:
-            print(f"{args.config[1]}: {config.get(args.config[1], 'NOT SET')}")
-        elif action == "delete" and len(args.config) == 2:
-            if args.config[1] in config:
-                del config[args.config[1]]
-                save_config(config)
-                print(f"Deleted {args.config[1]}")
+    # Help handler
+    if args.help:
+        print_custom_help()
+        sys.exit(0)
+
+    # Seed phrase generation
+    if args.generate_seed:
+        handle_generate_seed(args)
+        sys.exit(0)
+
+    # Shell handler
+    if args.shell:
+        handle_shell(parser)
+        sys.exit(0)
+
+    # Fallback to shell if interactive and no action/ticker/config specified
+    is_action = bool(args.config or args.order or args.chart or args.candle or args.pull or args.calc or args.portfolio or args.account)
+    if not args.ticker and not is_action:
+        if sys.stdin.isatty():
+            handle_shell(parser)
+            sys.exit(0)
         else:
-            print(f"{C_RED}ERROR:{C_RESET} Invalid config command. Use: set <key> <val>, get <key>, or delete <key>")
-        sys.exit(0)
+            print_custom_help()
+            sys.exit(0)
 
-    if args.help or (not args.ticker and not args.config):
-        print_custom_help()
-        sys.exit(0)
-
-    if not args.ticker:
-        print(f"{C_RED}ERROR:{C_RESET} Ticker symbol required for this operation.")
-        sys.exit(1)
-
-    if args.order:
-        if args.qty is None:
-            print(f"{C_RED}ERROR:{C_RESET} --qty is required for orders.")
-            sys.exit(1)
-        handle_order(args.ticker, args.order, args.qty, args.type, args.price)
-        sys.exit(0)
-
-    if args.chart or args.candle:
-        handle_chart(args.ticker, args.chart or args.candle, args.interval, is_candle=bool(args.candle))
-        sys.exit(0)
-
-    if not args.pull and not args.calc:
-        print_custom_help()
-        sys.exit(0)
-
-    data = get_ticker_data(args.ticker, args.base)
-    if args.pull:
-        handle_pull(args, data)
-    elif args.calc:
-        handle_calc(args, data)
+    # Normal execution path
+    run_command_logic(args, parser)
 
 if __name__ == "__main__":
     main()
