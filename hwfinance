@@ -468,8 +468,9 @@ def get_ticker_data(ticker_symbol, base_currency=None):
         except Exception as fallback_error:
             raise fallback_error
 
+    # FIX: All GBp/GBX values need normalising to GBP — price, cap, debt, cash, FCF, EBITDA
     if native_currency in ['GBp', 'GBX']:
-        if raw_price > 10.0: raw_price /= 100.0
+        raw_price /= 100.0
         raw_market_cap /= 100.0; raw_total_debt /= 100.0; raw_cash /= 100.0
         raw_fcf /= 100.0; raw_ebitda /= 100.0
         native_currency = 'GBP'
@@ -554,7 +555,9 @@ def handle_calc(args, data):
     # Derive Implied Values
     dcf_enterprise_value = present_value_fcf + terminal_value_pv
     dcf_equity_value = dcf_enterprise_value - data['total_debt'] + data['cash']
-    intrinsic_value_per_share = max(0.0, dcf_equity_value / data['shares_outstanding'])
+    # FIX: Guard against zero shares outstanding (ZeroDivisionError safety)
+    shares = data['shares_outstanding'] if data['shares_outstanding'] > 0 else 1.0
+    intrinsic_value_per_share = max(0.0, dcf_equity_value / shares)
 
     if args.json:
         calc_out = {
@@ -620,11 +623,11 @@ def handle_chart(ticker_symbol, period="1mo", interval="1d", is_candle=False):
         # Define chart style
         style = mpf.make_mpf_style(base_mpf_style='charles', gridstyle='', facecolor='black', edgecolor='white')
         
-        # Prepare kwargs for mpf.plot
+        # FIX: Use the custom style object we created, not the string 'charles'
         plot_kwargs = {
             'type': chart_type,
             'title': title,
-            'style': 'charles',
+            'style': style,
             'volume': True,
             'tight_layout': True,
             'show_nontrading': False
@@ -636,11 +639,20 @@ def handle_chart(ticker_symbol, period="1mo", interval="1d", is_candle=False):
         elif not history.empty and len(history) >= 20:
             plot_kwargs['mav'] = (20,)
             
-        # Plot using mplfinance
-        mpf.plot(history, **plot_kwargs)
+        # Plot using mplfinance — fallback to text chart if GUI fails
+        try:
+            mpf.plot(history, **plot_kwargs)
+        except Exception as gui_e:
+            print(f"{C_YELLOW}GUI chart unavailable, falling back to text chart: {gui_e}{C_RESET}")
+            handle_text_chart(ticker_symbol, period, interval, is_candle)
         
     except Exception as e:
         print(f"{C_RED}ERROR:{C_RESET} Failed to generate chart: {e}")
+        # Last-ditch text fallback
+        try:
+            handle_text_chart(ticker_symbol, period, interval, is_candle)
+        except:
+            pass
 
 # ─── Seed Phrase & Cross-Machine Vault ───────────────────────────────────────
 
@@ -1160,7 +1172,9 @@ def handle_calc_multiple(args, data_list):
         
         dcf_enterprise_value = present_value_fcf + terminal_value_pv
         dcf_equity_value = dcf_enterprise_value - data['total_debt'] + data['cash']
-        intrinsic_value_per_share = max(0.0, dcf_equity_value / data['shares_outstanding'])
+        # FIX: Guard against zero shares outstanding
+        so_shares = data['shares_outstanding'] if data['shares_outstanding'] > 0 else 1.0
+        intrinsic_value_per_share = max(0.0, dcf_equity_value / so_shares)
         
         row = [data['symbol']]
         if show_all or args.calc == 'fcf':
