@@ -1,6 +1,6 @@
 {
   "name": "hwfinance",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "High-density CLI financial analysis engine with professional charting and integrated Alpaca trading.",
   "main": "bin/index.js",
   "bin": {
