@@ -300,6 +300,8 @@ def print_custom_help():
     print(f"  {C_CYAN}--text-chart, -t{C_RESET}  Force text-based ASCII chart rendering (default if headless).")
     print(f"  {C_CYAN}--format, -f <fmt>{C_RESET} Output format: {C_WHITE}table, csv, tsv, markdown{C_RESET}")
     print(f"  {C_CYAN}--base <ISO>{C_RESET}      Override asset currency. Auto-converts to target index.")
+    print(f"  {C_CYAN}--news{C_RESET}            Fetch news stories and analyze public sentiment.")
+    print(f"  {C_CYAN}--indicators{C_RESET}      Calculate technical markers (RSI, MACD, BBands).")
     print(f"  {C_CYAN}--json{C_RESET}            Output raw program state structures for pipeline automation.")
     print(f"  {C_CYAN}--shell, -i{C_RESET}       Start an interactive financial command shell REPL.")
 
@@ -1279,6 +1281,153 @@ def handle_portfolio_and_account(args):
     except Exception as e:
         print(f"{C_RED}ERROR:{C_RESET} Alpaca API call failed: {e}")
 
+def handle_news_sentiment(ticker_symbol):
+    print_table_header("HWFINANCE NEWS & SENTIMENT", ticker_symbol, "N/A", False, "Direct")
+    try:
+        t = yf.Ticker(ticker_symbol)
+        news_items = t.news
+        if not news_items:
+            print(f"{C_YELLOW}No news found for {ticker_symbol} recently.{C_RESET}")
+            print_table_footer()
+            return
+
+        positive_words = {
+            "gain", "profit", "rise", "increase", "strong", "up", "bullish",
+            "growth", "success", "outperform", "buy", "opportunity", "rally", "upgrade",
+            "positive", "higher", "climb", "beat", "surge", "win"
+        }
+        negative_words = {
+            "loss", "drop", "decline", "fall", "weak", "down", "bearish",
+            "slump", "fail", "underperform", "sell", "risk", "cut", "downgrade",
+            "negative", "lower", "slip", "miss", "plunge", "lose"
+        }
+
+        print_table_row("Total News Stories Fetched", str(len(news_items)))
+        print(f"{C_GREEN}+-------------------------------------+---------------------+{C_RESET}")
+        
+        cumulative_score = 0.0
+        analyzed_count = 0
+        
+        for item in news_items[:5]:
+            # Handle new style nested yfinance news structure safely
+            content_dict = item.get('content', {}) if 'content' in item else item
+            title = content_dict.get('title', item.get('title', ''))
+            
+            provider_dict = content_dict.get('provider', {}) if 'provider' in content_dict else {}
+            publisher = provider_dict.get('displayName', item.get('publisher', 'Unknown'))
+            
+            # Simple rule-based sentiment
+            cleaned_text = ''.join(char.lower() if char.isalpha() or char.isspace() else ' ' for char in title)
+            words = cleaned_text.split()
+            
+            pos_count = sum(1 for w in words if w in positive_words)
+            neg_count = sum(1 for w in words if w in negative_words)
+            
+            # Sentiment score normalized between -1.0 and +1.0
+            total_matches = pos_count + neg_count
+            if total_matches > 0:
+                item_score = (pos_count - neg_count) / total_matches
+            else:
+                item_score = 0.0
+                
+            cumulative_score += item_score
+            analyzed_count += 1
+            
+            if item_score > 0.1:
+                col = C_GREEN
+                lbl = "BULLISH"
+            elif item_score < -0.1:
+                col = C_RED
+                lbl = "BEARISH"
+            else:
+                col = C_WHITE
+                lbl = "NEUTRAL"
+                
+            print(f" Headline: {C_BOLD}{title[:58]}{C_RESET}")
+            print(f" Source:   {publisher} | Sentiment: {col}{lbl} ({item_score:+.2f}){C_RESET}")
+            print(f"{C_GREEN}-------------------------------------------------------------{C_RESET}")
+            
+        avg_score = (cumulative_score / analyzed_count) if analyzed_count > 0 else 0.0
+        if avg_score > 0.15:
+            col = C_GREEN
+            lbl = "BULLISH"
+        elif avg_score < -0.15:
+            col = C_RED
+            lbl = "BEARISH"
+        else:
+            col = C_WHITE
+            lbl = "NEUTRAL"
+            
+        print_table_row("Overall Sentiment Score", f"{col}{avg_score:+.2f} ({lbl}){C_RESET}")
+        print_table_footer()
+    except Exception as e:
+        print(f"{C_RED}ERROR:{C_RESET} Failed to fetch or analyze news sentiment: {e}")
+
+def handle_technical_indicators(ticker_symbol):
+    print_table_header("HWFINANCE INDICATORS", ticker_symbol, "N/A", False, "Direct")
+    try:
+        t = yf.Ticker(ticker_symbol)
+        df = t.history(period="6mo")
+        if df.empty or len(df) < 50:
+            print(f"{C_RED}ERROR:{C_RESET} Insufficient historical data to calculate indicators.")
+            print_table_footer()
+            return
+            
+        # 1. Moving Averages (MA20, MA50)
+        close = df['Close']
+        ma20 = close.rolling(window=20).mean()
+        ma50 = close.rolling(window=50).mean()
+        
+        last_close = close.iloc[-1]
+        last_ma20 = ma20.iloc[-1]
+        last_ma50 = ma50.iloc[-1]
+        
+        # 2. RSI (Relative Strength Index) - 14 Days
+        delta = close.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        last_rsi = rsi.iloc[-1]
+        
+        # 3. MACD
+        exp1 = close.ewm(span=12, adjust=False).mean()
+        exp2 = close.ewm(span=26, adjust=False).mean()
+        macd = exp1 - exp2
+        signal = macd.ewm(span=9, adjust=False).mean()
+        
+        last_macd = macd.iloc[-1]
+        last_signal = signal.iloc[-1]
+        macd_hist = last_macd - last_signal
+        
+        # 4. Bollinger Bands (20 Day, 2 StdDev)
+        std20 = close.rolling(window=20).std()
+        upper_band = ma20 + (std20 * 2)
+        lower_band = ma20 - (std20 * 2)
+        
+        last_upper = upper_band.iloc[-1]
+        last_lower = lower_band.iloc[-1]
+        
+        print_table_row("Current Stock Price", f"{last_close:,.2f}")
+        print_table_row("Simple Moving Average (20)", f"{last_ma20:,.2f}")
+        print_table_row("Simple Moving Average (50)", f"{last_ma50:,.2f}")
+        
+        # Trend / Signal Readouts
+        rsi_signal = f"{C_GREEN}OVERSOLD{C_RESET}" if last_rsi < 30 else (f"{C_RED}OVERBOUGHT{C_RESET}" if last_rsi > 70 else f"{C_WHITE}NEUTRAL{C_RESET}")
+        print_table_row("RSI (14-day)", f"{last_rsi:.2f} ({rsi_signal})")
+        
+        macd_signal = f"{C_GREEN}BULLISH CROSS{C_RESET}" if macd_hist > 0 else f"{C_RED}BEARISH CROSS{C_RESET}"
+        print_table_row("MACD Histogram", f"{macd_hist:+.4f} ({macd_signal})")
+        
+        bb_percent = (last_close - last_lower) / (last_upper - last_lower) * 100 if (last_upper != last_lower) else 50.0
+        print_table_row("Bollinger Upper (2.0x)", f"{last_upper:,.2f}")
+        print_table_row("Bollinger Lower (2.0x)", f"{last_lower:,.2f}")
+        print_table_row("BB % Position", f"{bb_percent:.1f}%")
+        
+        print_table_footer()
+    except Exception as e:
+        print(f"{C_RED}ERROR:{C_RESET} Failed to calculate technical indicators: {e}")
+
 def run_config(config_args):
     config = load_config()
     action = config_args[0]
@@ -1321,6 +1470,14 @@ def run_command_logic(args, parser=None):
             print(f"{C_RED}ERROR:{C_RESET} --qty is required for orders.")
             return
         handle_order(args.ticker[0], args.order, args.qty, args.type, args.price, skip_confirm=args.yes)
+        return
+
+    if args.news:
+        handle_news_sentiment(args.ticker[0])
+        return
+
+    if args.indicators:
+        handle_technical_indicators(args.ticker[0])
         return
 
     if args.chart or args.candle:
@@ -1467,6 +1624,10 @@ def main():
     # Format Options
     parser.add_argument("-f", "--format", choices=["table", "csv", "tsv", "markdown"], default="table", help="Tabular output format")
     
+    # News & Technical Analysis Options
+    parser.add_argument("--news", action="store_true", help="Fetch news stories and run sentiment analysis")
+    parser.add_argument("--indicators", action="store_true", help="Calculate key technical indicators (RSI, MACD, Bollinger Bands, Moving Averages)")
+    
     # Trading Options
     parser.add_argument("--order", choices=['buy', 'sell'], help="Action for the order")
     parser.add_argument("--qty", type=float, help="Quantity of shares")
@@ -1508,7 +1669,7 @@ def main():
         sys.exit(0)
 
     # Fallback to shell if interactive and no action/ticker/config specified
-    is_action = bool(args.config or args.order or args.chart or args.candle or args.pull or args.calc or args.portfolio or args.account)
+    is_action = bool(args.config or args.order or args.chart or args.candle or args.pull or args.calc or args.portfolio or args.account or args.news or args.indicators)
     if not args.ticker and not is_action:
         if sys.stdin.isatty():
             handle_shell(parser)
