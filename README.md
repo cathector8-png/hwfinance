@@ -1,4 +1,4 @@
-# hwfinance 📈
+# hwfinance 
 
 [![Platform: Linux](https://img.shields.io/badge/Platform-Linux-blue.svg)](https://linux.org)
 [![Language: Python 3](https://img.shields.io/badge/Language-Python%203-yellow.svg)](https://python.org)
@@ -10,7 +10,7 @@
 
 ---
 
-## 🚀 Key Capabilities
+##  Key Capabilities
 
 *   **Multi-Exchange Engine:** Cross-resolves equities natively across **NASDAQ, NYSE, LSE, TSE, DAX, TSX, ASX, NSE, and Euronext**.
 *   **Multi-Ticker Comparison:** Analyse multiple stocks in a single command with a unified comparison table.
@@ -39,7 +39,7 @@ npm install -g hwfinance
 
 ---
 
-## 🕹️ Command Matrix & Operational Syntax
+##  Command Matrix & Operational Syntax
 
 ### Execution Pattern
 ```bash
@@ -82,7 +82,7 @@ hwfinance <ticker(s)> [flags]
 
 ---
 
-## ⚙️ Configuration (Trading Setup)
+##  Configuration (Trading Setup)
 
 ### Option 1: Environment Variables (Recommended for scripts & CI)
 
@@ -105,7 +105,7 @@ Environment variables always take precedence over the config file.
 
 ---
 
-## 📖 Terminal Action Examples
+##  Terminal Action Examples
 
 ### Multi-Ticker Comparison
 ```bash
@@ -208,5 +208,5 @@ hwfinance AAPL MSFT --pull all --json | jq '.[].price'
 
 ---
 
-## 🛡️ License
+##  License
 Distributed under the GPL-3.0 License. See `LICENSE` for more information.
