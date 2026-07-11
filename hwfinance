@@ -9,9 +9,23 @@ import random
 import os
 import base64
 import hashlib
-import yfinance as yf
-import mplfinance as mpf
-import alpaca_trade_api as tradeapi
+import subprocess
+from shutil import which
+
+try:
+    import yfinance as yf
+except Exception:
+    yf = None
+
+try:
+    import mplfinance as mpf
+except Exception:
+    mpf = None
+
+try:
+    import alpaca_trade_api as tradeapi
+except Exception:
+    tradeapi = None
 
 # ─── Seed Phrase Constants ───────────────────────────────────────────────────
 VAULT_SALT_AES    = b'hwfinance-aes-v1'
@@ -299,6 +313,8 @@ def print_custom_help():
     print(f"  {C_CYAN}--interval <int>{C_RESET}  Set chart data interval (1m, 5m, 1h, 1d, 1wk, 1mo).")
     print(f"  {C_CYAN}--text-chart, -t{C_RESET}  Force text-based ASCII chart rendering (default if headless).")
     print(f"  {C_CYAN}--format, -f <fmt>{C_RESET} Output format: {C_WHITE}table, csv, tsv, markdown{C_RESET}")
+    print(f"  {C_CYAN}--backend <engine>{C_RESET} Select valuation engine: {C_WHITE}python, julia{C_RESET}")
+    print(f"                 Use {C_WHITE}julia{C_RESET} for faster DCF, WACC, terminal value, and sensitivity calculations.")
     print(f"  {C_CYAN}--base <ISO>{C_RESET}      Override asset currency. Auto-converts to target index.")
     print(f"  {C_CYAN}--news{C_RESET}            Fetch news stories and analyze public sentiment.")
     print(f"  {C_CYAN}--indicators{C_RESET}      Calculate technical markers (RSI, MACD, BBands).")
@@ -339,6 +355,7 @@ def print_custom_help():
     print(f"\n{C_BOLD}EXAMPLES OF CORRECT COMMANDS:{C_RESET}")
     print(f"  hwfinance AAPL --pull all                     {C_GREEN}# Pull everything for Apple in USD{C_RESET}")
     print(f"  hwfinance BARC.L --calc all --json            {C_GREEN}# Output raw calculations via pipeline objects{C_RESET}")
+    print(f"  hwfinance AAPL --calc dcf --backend julia     {C_GREEN}# Run the richer Julia valuation workflow{C_RESET}")
     print(f"  hwfinance 7203.T --pull stock-price --base EUR {C_GREEN}# Get Toyota price converted to Euros{C_RESET}")
     print(f"{C_GREEN}+-----------------------------------------------------------------------+{C_RESET}\n")
 
@@ -505,6 +522,99 @@ def print_table_row(label, value_str):
 def print_table_footer():
     print(f"{C_GREEN}+-------------------------------------+---------------------+{C_RESET}\n")
 
+def calculate_metrics(data, backend="python"):
+    if backend == "julia":
+        backend_script = os.path.join(os.path.dirname(__file__), "backends", "julia", "valuation.jl")
+        if os.path.exists(backend_script) and which("julia"):
+            cmd = [
+                "julia",
+                backend_script,
+                f"--symbol={data.get('symbol', '')}",
+                f"--market_cap={data.get('market_cap', 0)}",
+                f"--total_debt={data.get('total_debt', 0)}",
+                f"--cash={data.get('cash', 0)}",
+                f"--fcf={data.get('fcf', 0)}",
+                f"--ebitda={data.get('ebitda', 0)}",
+                f"--beta={data.get('beta', 1)}",
+                f"--revenue_growth={data.get('revenue_growth', 0.03)}",
+                f"--shares_outstanding={data.get('shares_outstanding', 1)}",
+            ]
+            proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+            if proc.returncode == 0:
+                try:
+                    payload = json.loads(proc.stdout)
+                    return {
+                        "enterprise_value": float(payload.get("enterprise_value", 0.0)),
+                        "net_debt": float(payload.get("net_debt", 0.0)),
+                        "fcf_yield": float(payload.get("fcf_yield", 0.0)),
+                        "price_to_fcf": float(payload.get("price_to_fcf", 0.0)),
+                        "ev_ebitda": float(payload.get("ev_ebitda", 0.0)),
+                        "net_debt_ebitda": float(payload.get("net_debt_ebitda", 0.0)),
+                        "capm_discount_rate": float(payload.get("capm_discount_rate", 0.0)),
+                        "wacc": float(payload.get("wacc", payload.get("capm_discount_rate", 0.0))),
+                        "dcf_enterprise_value": float(payload.get("dcf_enterprise_value", 0.0)),
+                        "terminal_value": float(payload.get("terminal_value", 0.0)),
+                        "intrinsic_value_per_share": float(payload.get("intrinsic_value_per_share", 0.0)),
+                        "sensitivity": payload.get("sensitivity", {}),
+                    }
+                except Exception:
+                    pass
+
+    ev = data['market_cap'] + data['total_debt'] - data['cash']
+    net_debt = data['total_debt'] - data['cash']
+    fcf_yield = (data['fcf'] / data['market_cap']) if data['market_cap'] > 0 else 0.0
+    p_fcf = (data['market_cap'] / data['fcf']) if data['fcf'] > 0 else 0.0
+    ev_ebitda = (ev / data['ebitda']) if data['ebitda'] > 0 else 0.0
+    nd_ebitda = (net_debt / data['ebitda']) if data['ebitda'] > 0 else 0.0
+
+    rf = 0.040
+    erp = 0.055
+    discount_rate = max(0.05, min(rf + (data['beta'] * erp), 0.15))
+
+    present_value_fcf = 0.0
+    projected_fcf = data['fcf']
+    high_growth = data['revenue_growth']
+    terminal_growth = 0.025
+
+    for year in range(1, 6):
+        projected_fcf *= (1 + high_growth)
+        present_value_fcf += projected_fcf / ((1 + discount_rate) ** year)
+
+    current_growth = high_growth
+    for year in range(6, 11):
+        current_growth -= (high_growth - terminal_growth) / 5
+        projected_fcf *= (1 + current_growth)
+        present_value_fcf += projected_fcf / ((1 + discount_rate) ** year)
+
+    terminal_value = (projected_fcf * (1 + terminal_growth)) / (discount_rate - terminal_growth)
+    terminal_value_pv = terminal_value / ((1 + discount_rate) ** 10)
+
+    dcf_enterprise_value = present_value_fcf + terminal_value_pv
+    dcf_equity_value = dcf_enterprise_value - data['total_debt'] + data['cash']
+    shares = data['shares_outstanding'] if data['shares_outstanding'] > 0 else 1.0
+    intrinsic_value_per_share = max(0.0, dcf_equity_value / shares)
+
+    return {
+        "enterprise_value": ev,
+        "net_debt": net_debt,
+        "fcf_yield": fcf_yield,
+        "price_to_fcf": p_fcf,
+        "ev_ebitda": ev_ebitda,
+        "net_debt_ebitda": nd_ebitda,
+        "capm_discount_rate": discount_rate,
+        "wacc": discount_rate,
+        "dcf_enterprise_value": dcf_enterprise_value,
+        "terminal_value": terminal_value,
+        "intrinsic_value_per_share": intrinsic_value_per_share,
+        "sensitivity": {
+            "discount_rate": discount_rate,
+            "high_growth": high_growth,
+            "terminal_growth": 0.025,
+            "intrinsic_value_per_share": intrinsic_value_per_share,
+        },
+    }
+
+
 def handle_pull(args, data):
     if args.json:
         print(json.dumps(data, indent=4))
@@ -519,47 +629,17 @@ def handle_pull(args, data):
     print_table_footer()
 
 def handle_calc(args, data):
-    # Basic core valuations
-    ev = data['market_cap'] + data['total_debt'] - data['cash']
-    net_debt = data['total_debt'] - data['cash']
-    fcf_yield = (data['fcf'] / data['market_cap']) if data['market_cap'] > 0 else 0.0
-    p_fcf = (data['market_cap'] / data['fcf']) if data['fcf'] > 0 else 0.0
-    ev_ebitda = (ev / data['ebitda']) if data['ebitda'] > 0 else 0.0
-    nd_ebitda = (net_debt / data['ebitda']) if data['ebitda'] > 0 else 0.0
-    
-    # Capital Asset Pricing Model (CAPM) Cost of Equity
-    rf = 0.040     # Baseline 10-Year Treasury Yield
-    erp = 0.055    # Equity Risk Premium Baseline
-    discount_rate = max(0.05, min(rf + (data['beta'] * erp), 0.15)) # Floor at 5%, Cap at 15%
-    
-    # Two-Stage DCF Valuation Runway Core (Years 1-10)
-    present_value_fcf = 0.0
-    projected_fcf = data['fcf']
+    calc_out = calculate_metrics(data, backend=getattr(args, 'backend', 'python'))
+    ev = calc_out['enterprise_value']
+    net_debt = calc_out['net_debt']
+    fcf_yield = calc_out['fcf_yield']
+    p_fcf = calc_out['price_to_fcf']
+    ev_ebitda = calc_out['ev_ebitda']
+    nd_ebitda = calc_out['net_debt_ebitda']
+    discount_rate = calc_out['capm_discount_rate']
+    dcf_enterprise_value = calc_out['dcf_enterprise_value']
+    intrinsic_value_per_share = calc_out['intrinsic_value_per_share']
     high_growth = data['revenue_growth']
-    terminal_growth = 0.025 # Baseline GDP tracking proxy
-    
-    # Phase 1: High Growth Runway Phase (Years 1-5)
-    for year in range(1, 6):
-        projected_fcf *= (1 + high_growth)
-        present_value_fcf += projected_fcf / ((1 + discount_rate) ** year)
-        
-    # Phase 2: Deceleration Fade Stage (Years 6-10)
-    current_growth = high_growth
-    for year in range(6, 11):
-        current_growth -= (high_growth - terminal_growth) / 5
-        projected_fcf *= (1 + current_growth)
-        present_value_fcf += projected_fcf / ((1 + discount_rate) ** year)
-        
-    # Terminal Value Formulation via Gordon Growth at Year 10
-    terminal_value = (projected_fcf * (1 + terminal_growth)) / (discount_rate - terminal_growth)
-    terminal_value_pv = terminal_value / ((1 + discount_rate) ** 10)
-    
-    # Derive Implied Values
-    dcf_enterprise_value = present_value_fcf + terminal_value_pv
-    dcf_equity_value = dcf_enterprise_value - data['total_debt'] + data['cash']
-    # FIX: Guard against zero shares outstanding (ZeroDivisionError safety)
-    shares = data['shares_outstanding'] if data['shares_outstanding'] > 0 else 1.0
-    intrinsic_value_per_share = max(0.0, dcf_equity_value / shares)
 
     if args.json:
         calc_out = {
@@ -1143,40 +1223,16 @@ def handle_calc_multiple(args, data_list):
     rows = []
     for data in data_list:
         cs = data['currency_symbol']
-        ev = data['market_cap'] + data['total_debt'] - data['cash']
-        net_debt = data['total_debt'] - data['cash']
-        fcf_yield = (data['fcf'] / data['market_cap']) if data['market_cap'] > 0 else 0.0
-        p_fcf = (data['market_cap'] / data['fcf']) if data['fcf'] > 0 else 0.0
-        ev_ebitda = (ev / data['ebitda']) if data['ebitda'] > 0 else 0.0
-        nd_ebitda = (net_debt / data['ebitda']) if data['ebitda'] > 0 else 0.0
-        
-        rf = 0.040
-        erp = 0.055
-        discount_rate = max(0.05, min(rf + (data['beta'] * erp), 0.15))
-        
-        projected_fcf = data['fcf']
+        calc_out = calculate_metrics(data, backend=getattr(args, 'backend', 'python'))
+        ev = calc_out['enterprise_value']
+        fcf_yield = calc_out['fcf_yield']
+        p_fcf = calc_out['price_to_fcf']
+        ev_ebitda = calc_out['ev_ebitda']
+        nd_ebitda = calc_out['net_debt_ebitda']
+        discount_rate = calc_out['capm_discount_rate']
+        dcf_enterprise_value = calc_out['dcf_enterprise_value']
+        intrinsic_value_per_share = calc_out['intrinsic_value_per_share']
         high_growth = data['revenue_growth']
-        terminal_growth = 0.025
-        
-        present_value_fcf = 0.0
-        for year in range(1, 6):
-            projected_fcf *= (1 + high_growth)
-            present_value_fcf += projected_fcf / ((1 + discount_rate) ** year)
-            
-        current_growth = high_growth
-        for year in range(6, 11):
-            current_growth -= (high_growth - terminal_growth) / 5
-            projected_fcf *= (1 + current_growth)
-            present_value_fcf += projected_fcf / ((1 + discount_rate) ** year)
-            
-        terminal_value = (projected_fcf * (1 + terminal_growth)) / (discount_rate - terminal_growth)
-        terminal_value_pv = terminal_value / ((1 + discount_rate) ** 10)
-        
-        dcf_enterprise_value = present_value_fcf + terminal_value_pv
-        dcf_equity_value = dcf_enterprise_value - data['total_debt'] + data['cash']
-        # FIX: Guard against zero shares outstanding
-        so_shares = data['shares_outstanding'] if data['shares_outstanding'] > 0 else 1.0
-        intrinsic_value_per_share = max(0.0, dcf_equity_value / so_shares)
         
         row = [data['symbol']]
         if show_all or args.calc == 'fcf':
@@ -1623,6 +1679,7 @@ def main():
     
     # Format Options
     parser.add_argument("-f", "--format", choices=["table", "csv", "tsv", "markdown"], default="table", help="Tabular output format")
+    parser.add_argument("--backend", choices=["python", "julia"], default="python", help="Use Python or Julia for valuation math")
     
     # News & Technical Analysis Options
     parser.add_argument("--news", action="store_true", help="Fetch news stories and run sentiment analysis")

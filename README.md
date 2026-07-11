@@ -26,6 +26,7 @@
 *   **Automatic UK Normalisation:** Detects London Stock Exchange (LSE) penny structures (`GBX`/`GBp`) and auto-scales them to standard Pounds (`GBP`).
 *   **Cross-Border FX Layer:** Pass any currency flag (`--base EUR`) to calculate and normalize foreign equities into your home currency profile.
 *   **Pipeline Ready:** Output raw program state as JSON for seamless integration with other CLI tools.
+*   **Optional Julia Backend:** Offload valuation math to Julia for faster DCF, WACC, terminal-value, and sensitivity calculations.
 
 ---
 
@@ -57,6 +58,7 @@ hwfinance <ticker(s)> [flags]
 | `--interval` | `1m`, `5m`, `1h`, `1d`, etc. | Sets the data granularity for charts. |
 | `-t`, `--text-chart` | None | Forces terminal-based ASCII/Unicode chart rendering. Auto-activates if `DISPLAY` is unset. |
 | `-f`, `--format` | `table`, `csv`, `tsv`, `markdown` | Sets the tabular output format (default: `table`). |
+| `--backend` | `python`, `julia` | Routes valuation math to the Python engine or the optional Julia backend for richer numeric output. |
 | `--order` | `buy`, `sell` | Initiates a stock order via Alpaca (with confirmation prompt). |
 | `--qty` | Number | Specifies share quantity for an order. |
 | `--type` | `market`, `limit` | Sets order type (Default: `market`). |
@@ -154,6 +156,9 @@ hwfinance AAPL --pull all
 # Evaluate Enterprise Value and DCF for Barclays (LSE)
 hwfinance BARC.L --calc all
 
+# Run the valuation workflow with the Julia backend for richer outputs
+hwfinance AAPL --calc dcf --backend julia
+
 # Query Toyota (TSE) with automatic conversion to Euros
 hwfinance 7203.T --pull stock-price --base EUR
 ```
@@ -198,6 +203,17 @@ hwfinance -i
 ```
 
 ### Advanced Pipeline Integration
+
+### Optional Julia Backend for Heavy Math
+
+You can offload the valuation math to a Julia backend for faster numeric calculations:
+
+```bash
+hwfinance AAPL --calc dcf --backend julia
+```
+
+The backend is optional; if Julia is not installed or the backend is unavailable, the CLI falls back to the existing Python implementation.
+
 ```bash
 # Pipe JSON output to jq for custom parsing
 hwfinance MSFT --pull all --json | jq '.price'
